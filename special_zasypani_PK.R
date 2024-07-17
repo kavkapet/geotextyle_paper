@@ -41,7 +41,7 @@ setwd("d:/5_papers/2023_zasypane_geotextilie/ruzne_zasypani/")
 
 
 ### Na?ti dataset s pr?b?hy odtok? a koncentrac?
-qsres <- read.csv("zasypani_odtoky.csv", stringsAsFactors = F)
+qsres <- read.csv("zasypani_odtoky.csv", stringsAsFactors = F, sep = ";", dec = ".", header = T)
 #all_in <- read.csv("xlab_data_clean.csv", stringsAsFactors = F)
 grain = read.csv("d:/5_papers/2023_zasypane_geotextilie/_dta_work/grain_size_export.csv", stringsAsFactors = F, sep = ";", dec = ",", header = T)
 
@@ -83,7 +83,7 @@ qsres <- qsres %>%
 xx = str(qsres)
 qsresnF = qsres
 qsres <- qsres %>% mutate(lokalita = as.factor(lokalita),
-                          datum = as.Date(datum),
+                          datum = as.Date(datum,tryFormats = c("%d.%m.%Y")),
                           simcislo = as.factor(simcislo),
                           # plocha = as.factor(plocha),
                           sklon_st = str_replace(sklon_st,"20","22"),
@@ -99,20 +99,6 @@ qsres <- qsres %>% mutate(lokalita = as.factor(lokalita),
 
 
 #qsstat <- read.csv("W_special_zasypani_stat.csv", stringsAsFactors = F)
-#str(qsstat)
-qsstat <- qsstat %>% mutate(ID = as.factor(ID),
-                            lokalita = as.factor(lokalita),
-                            # datum = as.Date(datum),
-                            simcislo = as.factor(simcislo),
-                            # plocha = as.factor(plocha),
-                            sklon_st = str_replace(sklon_st,"20","22"),
-                            sklon_st = as.factor(sklon_st),
-                            opat_typ = as.factor(opat_typ),
-                            intenzita = as.factor(intenzita),
-                            repetice = as.factor(repetice),
-                            system = as.factor(system))
-                            #NAvalue = as.factor(NAvalues))
-
 
 # select total value at the end
 
@@ -190,14 +176,15 @@ xxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_
   #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
   scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
   facet_grid (opat_typ_grain ~ poc_stav_int) +
+  ylim (0, 5) +
   theme_bw()
 
 
 
 
-plot(xxplot)
+plot(xxplotsed)
 
-xxplot2  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+xxplot2  = ggplot() +#(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
   geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
   geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactorq), method="loess", col="grey", show.legend = TRUE) +
@@ -211,7 +198,24 @@ xxplot2  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF
   
   
   theme_bw()
+plot(xxplot2 + labs(title = "Runoff, Sediment flux and Particle Size Distribution", x = "Time", y = "q - black [l/min], flux - gray [g/min], PSD - colours [% Undersize]"))
 
+xxplot3  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+  geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
+  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
+  geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactor), method="loess", col="grey", show.legend = TRUE) +
+  geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactor), method="loess", col="grey") +
+  geom_point(data = summary_table_sel, mapping = aes(x = summary_table_sel$init_state_num, y = summary_table_sel$median_percentage*scaleFactor_grain, color = as.character(summary_table_sel$particlesize), shape = as.character(summary_table_sel$aggregates))) +
+  
+  #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
+  scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
+  facet_grid (opat_typ_grain ~ poc_stav_int) +
+  theme_bw()
+
+
+
+
+plot(xxplot3)
 
 
 
