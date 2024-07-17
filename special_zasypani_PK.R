@@ -164,8 +164,8 @@ sdata_wide_sel = sdata_wide#[sdata_wide$opat_typ_grain == "BSOIL",]
 
 
 scaleFactorq <- max(qsresnF_sel$prutok2_l.min) / max(qsresnF_sel$smyv1_g.l)
-scaleFactor <- max(qsresnF_sel$Qcum_l) / max(qsresnF_sel$S2cum_g)
-scaleFactor_grain <- max(qsresnF_sel$Qcum_l) / 500
+scaleFactor <- median(qsresnF_sel$Qcum_l) / median(qsresnF_sel$S2cum_g)
+scaleFactor_grain <- max(qsresnF_sel$Qcum_l) / 60
 xxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
   geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
@@ -176,60 +176,67 @@ xxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_
   #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
   scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
   facet_grid (opat_typ_grain ~ poc_stav_int) +
-  ylim (0, 5) +
+  ylim (0, 350) +
   theme_bw()
 
 
 
 
-plot(xxplotsed)
+plot(xxplot)
 
-xxplot2  = ggplot() +#(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
-  geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
-  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
-  geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactorq), method="loess", col="grey", show.legend = TRUE) +
-  geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactorq), method="loess", col="grey") +
-  geom_point(data = summary_table_sel, mapping = aes(x = summary_table_sel$init_state_num, y = summary_table_sel$median_percentage*scaleFactor_grain, color = as.character(summary_table_sel$particlesize), shape = as.character(summary_table_sel$aggregates))) +
-  
-  #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
-  #scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
-  facet_grid (opat_typ_grain ~ poc_stav_int) +
-  ylim (0, 40) +
-  
+xxplot_Q  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+  geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
+  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
+  facet_grid (poc_stav_int ~ opat_typ_grain) +
+  labs(title = "Runoff", x = "Time", y = "Cumulative runoff [l]")+
   
   theme_bw()
-plot(xxplot2 + labs(title = "Runoff, Sediment flux and Particle Size Distribution", x = "Time", y = "q - black [l/min], flux - gray [g/min], PSD - colours [% Undersize]"))
 
-xxplot3  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
-  geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
-  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$prutok1_l.min), method="loess", col="black") +
-  geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactor), method="loess", col="grey", show.legend = TRUE) +
-  geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$sedflux1_g.min * scaleFactor), method="loess", col="grey") +
-  geom_point(data = summary_table_sel, mapping = aes(x = summary_table_sel$init_state_num, y = summary_table_sel$median_percentage*scaleFactor_grain, color = as.character(summary_table_sel$particlesize), shape = as.character(summary_table_sel$aggregates))) +
-  
-  #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
-  scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
-  facet_grid (opat_typ_grain ~ poc_stav_int) +
+
+
+
+plot(xxplot_Q)
+
+xxplot_S  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+  geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g * scaleFactor), method="loess", col="grey", show.legend = TRUE) +
+  geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g * scaleFactor), method="loess", col="grey") +
+  facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+  ylim (0, 1000) +
+  labs(title = "Soil loss", x = "Time", y = "Cumulative soil loss [g]")+
   theme_bw()
 
 
 
 
-plot(xxplot3)
+plot(xxplot_S)
+scaleFactor_grain2 <- max(qsresnF_sel$Qcum_l) / 80
 
+xxplot2 <- ggplot() +
+  geom_line(data = qsresnF_sel, mapping = aes(x = t2_min, y = prutok1_l.min), col = "black") +
+  geom_point(data = qsresnF_sel, mapping = aes(x = t2_min, y = prutok1_l.min), col = "black") +
+  geom_line(data = qsresnF_sel, mapping = aes(x = t2_min, y = sedflux1_g.min * scaleFactorq), col = "grey", show.legend = TRUE) +
+  geom_point(data = qsresnF_sel, mapping = aes(x = t2_min, y = sedflux1_g.min * scaleFactorq), col = "grey") +
+  geom_point(data = summary_table_sel, mapping = aes(x = init_state_num, y = median_percentage * scaleFactor_grain2, color = as.character(particlesize), shape = as.character(aggregates))) +
+  facet_grid(opat_typ_grain ~ poc_stav_int) + #, scales = "free_y") +
+  scale_y_continuous(
+    name = "q - black [l/min]", 
+    sec.axis = sec_axis(~./scaleFactor_grain2, name = "flux - gray [g/min], PSD - colours [% Undersize]")
+  ) +
+  theme_bw() +
+  labs(title = "Runoff, Sediment flux and Particle Size Distribution", x = "Time")
 
-
-plot(xxplot2)
-
-
+# Print the plot
+print(xxplot2)
 
 ratioplot =  ggplot() + 
-  geom_jitter(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID,y = sdata_wide_sel$median_percentage_without, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 18, size  = 2) + 
-  geom_jitter(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID, y = sdata_wide_sel$median_percentage_with, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 17, size  = 2) + 
-  geom_point(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID, y = ratio, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 16, size  = 3) + 
+  geom_point(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID, y = ratio, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 1, size  = 4) + 
+  geom_point(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID,y = sdata_wide_sel$median_percentage_without, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 2, size  = 1) + 
+  geom_jitter(data = sdata_wide_sel, aes(x = sdata_wide_sel$g_ID, y = sdata_wide_sel$median_percentage_with, colour =  as.character(sdata_wide_sel$particlesize_with)), shape = 0, size  = 1.5) + 
   theme_bw()+
+  labs(title = "Particle Size Distribution", x = "data seqence", y = "[%]")+
   #ylim (0, 15) +
-  facet_grid(opat_typ_grain ~ .)
+  facet_grid(opat_typ_grain ~ ., scales = "free_y")+
+  theme(axis.text.x = element_text(angle = 80, hjust = 1))
 
 plot(ratioplot)
 
