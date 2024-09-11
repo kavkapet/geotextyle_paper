@@ -2,6 +2,8 @@
 library(readxl)    # For reading Excel files
 library(minpack.lm)
 library(dplyr)# For non-linear least squares optimization
+######GA optimalizace
+library(GA)
 
 # Load data
 file_path <- "d:/0_Smoderp/IA_test.xlsx"
@@ -38,59 +40,6 @@ model_function <- function(params, runoff, slope) {
   Z * (runoff^X) * (slope^Y) * 0.57
 }
 
-# Residual sum of squares (RSS) function
-rss_function <- function(params, data) {
-  with(data, {
-    residuals <- soilloss - model_function(params, runoff, slope)  # Use slope constant (9.0)
-    residuals  # Return residuals for optimization
-  })
-}
-
-# Initial guesses for Z, X, and Y
-initial_params <- c(Z = 1, X = 1, Y = 1)
-
-# Fit the model using non-linear least squares optimization
-fit <- nls.lm(par = initial_params, fn = rss_function, data = data_combined)
-
-# Show the optimized parameters
-print(fit$par)
-
-# Predicted values based on the fitted model
-predicted_soilloss <- model_function(fit$par, data_combined$runoff, slope = 9.0)
-
-# Calculate residuals
-residuals <- data_combined$soilloss - predicted_soilloss
-
-# Plot residuals against fitted values (predicted_soilloss)
-plot(predicted_soilloss, residuals, pch = 16, 
-     xlab = "Fitted Values (Predicted Soil Loss)", 
-     ylab = "Residuals", 
-     main = "Residuals vs Fitted Values")
-abline(h = 0, col = "red", lwd = 2)  # Add a horizontal line at y=0
-
-# Alternatively, plot residuals against runoff
-
-#XXX
-
-
-plot(data_combined$`soilloss g/min`, predicted_soilloss, pch = 16, col = data_combined$init,
-     xlab = "Soil Loss  (g/min)",, 
-     ylab = "Soil Loss calc (g/min)", 
-     main = "Observed vs Predicted Soil Loss")
-abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)  # a = intercept, b = slope; red dashed line
-
-
-# Add the regression equation as text on the plot
-equation <- paste0("Qs[g/min] = ", round(fit$par[1], 2), " * Q[l/min]^", round(fit$par[2], 2), " * S[%]^", round(fit$par[3], 2))
-text(x = max(data_combined$soilloss) * 0.5, y = max(predicted_soilloss) * 0.9, 
-     labels = equation, col = "black", cex = 1.2)
-
-
-
-lines(data_combined$runoff, predicted_soilloss, col = "red", lwd = 2)
-
-######GA optimalizace
-library(GA)
 
 # Define the fitness function for GA optimization
 fitness_function <- function(params, data_subset) {
