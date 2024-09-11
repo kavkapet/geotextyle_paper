@@ -120,3 +120,12 @@ plot3 <- ggplot(data = mean_values3, aes(x = as.numeric(particlesize), y = perce
   theme_minimal()
 plot(plot3)
 
+
+
+####readdTA
+setwd("d:/5_papers/2024_grain_size_methodology/")
+
+# Load the data
+grain <- read.csv("all_undersize2.csv", sep = ";", header = T, dec = ".", fileEncoding = "ISO-8859-1")
+grain$code = grain$Sample.Name
+grain <- grain %>% separate(Sample.Name, into = c("method", "size_in", "dispergant", "x", "yy"), sep = "_")
