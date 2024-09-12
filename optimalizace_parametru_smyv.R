@@ -4,6 +4,8 @@ library(minpack.lm)
 library(dplyr)# For non-linear least squares optimization
 ######GA optimalizace
 library(GA)
+library(ggplot2)
+library(data.table)
 
 # Load data
 file_path <- "d:/0_Smoderp/IA_test.xlsx"
@@ -27,10 +29,14 @@ data_combined = data
 #data_combined$soilloss <- as.numeric(data_combined$`soilloss g/min`)
 data_combined$runoff <- as.numeric(data_combined$`prutok_l_min`)
 data_combined$soilloss <- as.numeric(data_combined$`ztrata_pudy_g_min`)
-data_combined$slope <- 9.0  # In this case, slope can be treated as variable (you can change it)
+data_combined$slope <- 0.09  # In this case, slope can be treated as variable (you can change it)
 data_combined$K <- 0.57  # In this case, slope can be treated as variable (you can change it)
-data_combined$C <- 1.0  # In this case, slope can be treated as variable (you can change it)
+data_combined <- data_combined %>% mutate(BBCH = ifelse(plodina == "úhor udržovaný" & is.na(BBCH), 0, BBCH))
+data_combined$C <- (100 - (100 - data_combined$BBCH))/100   # In this case, slope can be treated as variable (you can change it)
+data_combined <- data_combined %>% mutate(C = ifelse(is.na(C), 0.95, C))
 
+data_combined <- data_combined %>%
+  filter(!is.na(soilloss) & !is.na(runoff))
 
 
 # Define the model function: soilloss = Z * Q^X * S^Y
@@ -51,21 +57,30 @@ fitness_function <- function(params, data_subset) {
 lower_bounds <- c(0, 0, 0)  # Lower bounds for Z, X, and Y
 upper_bounds <- c(100, 10, 10)  # Upper bounds for Z, X, and Y
 
-# Create an empty dataframe to store the results
-results_df <- data.frame(plodina = character(), 
-                         poc_vlhkost = numeric(), 
-                         Z = numeric(), 
-                         X = numeric(), 
-                         Y = numeric(),
-                         stringsAsFactors = FALSE)
 
-# Loop through unique combinations of `plodina` and `poc_vlhkost`
-unique_combinations <- unique(data[, c("poc_stav", "poc_vlhkost")])
+un_list <- c("plodina", "poc_stav")
+
+# Create the unique combinations and count rows for each combination
+unique_combinations <- data_combined %>%
+  group_by(across(all_of(un_list))) %>%
+  summarize(count = n(), .groups = 'drop')
+ggplot(unique_combinations, aes(x = plodina, y = count, fill = as.factor(poc_stav))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Count of Unique Combinations",
+       x = "Plodina",
+       y = "Count",
+       fill = "Poc Stav") +
+  theme_minimal()
+unique_combinations = as.matrix(unique_combinations)
+# Create an empty dataframe to store the results
+
+results_df = data.frame()
 
 for (i in 1:nrow(unique_combinations)) {
-  # Subset data based on `plodina` and `poc_vlhkost`
+  # Subset data based on `plodina` and `poc_vlhkost` !!!!!tady_bacha, na to co se optimalizuje
   subset_data <- data_combined %>%
-    filter(plodina == unique_combinations$plodina[i], poc_vlhkost == unique_combinations$poc_vlhkost[i])
+    filter(plodina == unique_combinations[i, 1], poc_stav == unique_combinations[i,2])
+  print(i)
   
   # Define the fitness function inside the loop (without passing data_subset as an argument)
   fitness_function_in_loop <- function(params) {
@@ -84,21 +99,43 @@ for (i in 1:nrow(unique_combinations)) {
   optimal_params <- ga_result@solution
   
   # Append the results to the dataframe
-  results_df <- rbind(results_df, data.frame(plodina = unique_combinations$plodina[i], 
-                                             poc_vlhkost = unique_combinations$poc_vlhkost[i], 
+  results_df <- rbind(results_df, data.frame(plodina = unique_combinations[i,1], 
+                                             poc_vlhkost = unique_combinations[i,2], 
                                              Z = optimal_params[1], 
                                              X = optimal_params[2], 
-                                             Y = optimal_params[3]))
+                                             Y = optimal_params[3]
+                                             ))
 }
 
+
+# Extract the optimized parameters
+optimal_params <- ga_result@solution
+
+
+# Calculate predicted soil loss
+predicted_soil_loss <- model_function(optimal_params, data_combined$runoff, data_combined$slope, data_combined$K)
+
+# Store the predicted values back in the original dataframe
+
 # Print the resulting dataframe with best fits
+colnames(results_df) = c(un_list, "X", "Y", "Z", "C")
 print(results_df)
+
+data_combined =  inner_join(data_combined, results_df, by = un_list)
+
+paramss = data_combined[,c(23, 24, 25, 26)]
+
+
+predicted_soilloss = model_function(paramss, data_combined$runoff, data_combined$slope, data_combined$K)
+data_combined$predicted_soilloss =  predicted_soilloss[,1]
+# Print the resulting dataframe with best fits
 
 # Optionally, save the results as a CSV file
 # write.csv(results_df, "best_fits_per_group.csv", row.names = FALSE)
 
 # Plot the observed vs. predicted soil loss
-plot(data_combined$soilloss, predicted_soilloss, pch = 16, col = data_combined$init,
+data_combined$init = 1
+plot(data_combined$soilloss, data_combined$predicted_soilloss, pch = 16, col = data_combined$init,
      xlab = "Observed Soil Loss (g/min)", 
      ylab = "Predicted Soil Loss (g/min)", 
      main = "Observed vs Predicted Soil Loss with 1:1 Line")
@@ -116,9 +153,21 @@ text(x = max(data_combined$soilloss) * 0.5,
 
 # Optionally, add a legend
 legend("topleft", legend = c("1:1 Line", "Data"), col = c("red", "blue"), lty = c(2, NA), pch = c(NA, 16))
-data_combined$soiloss_martin = 2.11*data_combined$`runoff l/min`^2.035*data_combined$slope^1.36*0.57/10
+data_combined$soiloss_martin = 2.11*data_combined$runoff^2.035*(data_combined$slope*100)^1.36*0.57/10
 plot(data_combined$soilloss, data_combined$soiloss_martin, pch = 10, col = data_combined$init)
 points(data_combined$soilloss, data_combined$predicted_soilloss, pch = 9, col = data_combined$init+2)
 
-abline(a = 0, b = 1, col = "black", lwd = 2, lty = 2)  # a = intercept, b = slope; red dashed line
+abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)  # a = intercept, b = slope; red dashed line
 
+
+xplot= ggplot(data_combined, aes(x = plodina, y = C.y, color = as.factor(poc_stav))) +
+  geom_point() +
+  labs(title = "Count of Unique Combinations",
+       x = "Plodina",
+       y = "Count",
+       fill = "Poc Stav") +
+  theme(axis.text.x = element_text(angle = 45))+
+  theme_minimal()
+  
+plot(xplot)#####
+subset_data <- data_combined %>% filter(plodina == unique_combinations[i, 1], poc_vlhkost == unique_combinations[i,2])
