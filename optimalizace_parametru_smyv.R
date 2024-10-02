@@ -9,7 +9,7 @@ library(data.table)
 
 # Load data
 setwd("d:/2_granty_projekty/2_Bezici/0_DS/datbaze_data/")
-data =  read.csv(file = "runoff_sediment_intervals_20240917.csv",sep = ";",fileEncoding = "UTF-8")
+data =  read.csv(file = "runoff_sediment_intervals_20240925_en.csv",sep = ";",fileEncoding = "UTF-8")
 
 #data <- read.csv2(file_path, header = TRUE, sep = ";", dec = ",")
 
@@ -30,14 +30,17 @@ srcDTA = data
 srcDTA$TIMESTAMP = as.POSIXct(strptime(srcDTA$date, "%d.%m.%Y"))
 srcDTA$t1_t_form <- as.POSIXct(srcDTA$t1, format = "%H:%M:%S")
 srcDTA$t2_t_form <- as.POSIXct(srcDTA$t2, format = "%H:%M:%S")
+srcDTA$dt_t_form <- as.POSIXct(srcDTA$interval.duration, format = "%H:%M:%S")
 srcDTA$month <- format(srcDTA$TIMESTAMP, "%m")
+srcDTA$dt_min <- format(srcDTA$dt_t_form, "%M") + format(srcDTA$dt_t_form, "%M")/60
+
 srcDTA$cover  <- case_when(
   srcDTA$crop %in% c("cultivated fallow", "bare soil") ~ "bare",
   srcDTA$crop %in% c("Geotextile Macmat 8.1", "Geotextile Enkamat 7010", "Geotextile K700", "Geotextile Biomac-c", "Geotextile Enkamat 7020", "Geotextile Macmat 18.1", "Macmat 18 fill", "Jute", "Triangle", "Enkamat 7020 filled", "Fortrac 3D filled", "Fortrac 3D") ~ "geotex",
   TRUE ~ "vege")
 data_combined = srcDTA
 
-data_combined$runoff <- as.numeric(data_combined$`discharge..l.min.1.`)
+data_combined$runoff <- as.numeric(data_combined$flow.rate..l.min.1.)
 data_combined$soilloss <- as.numeric(data_combined$`SS.flux..g.min.1.`)
 data_combined$slope <- 0.09  # In this case, slope can be treated as variable (you can change it)
 data_combined$slope = data_combined$`plot.slope....`/100  # In this case, slope can be treated as variable (you can change it)
@@ -49,7 +52,7 @@ data_combined <- data_combined %>%
 
 data_combined$C <- (100 - data_combined$BBCH)/100   # In this case, slope can be treated as variable (you can change it)
 data_combined <- data_combined %>% mutate(C = ifelse(is.na(C), 0.95, C))
-
+data_combined <- data_combined %>% filter(!is.na(soilloss) & !is.na(runoff))
 
 # Define the model function: soilloss = Z * Q^X * S^Y
 model_function <- function(params, runoff, slope, K, C) {
@@ -216,3 +219,9 @@ print(summary_stats)
 plot(summary_stats$mean_soilloss, summary_stats$mean_predicted_soilloss, pch = 10, col = as.factor(summary_stats$cover))
 abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)  # a = intercept, b = slope; red dashed line
 points(data_combined$soilloss, data_combined$predicted_soilloss_g_l_min, pch = 9, col = data_combined$init+2)
+
+
+#####Sel otoceny_simulator_simulace_366
+sim366 = data_combined[1 == c(366),]
+
+  
