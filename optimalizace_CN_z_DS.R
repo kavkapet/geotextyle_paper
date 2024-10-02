@@ -47,7 +47,7 @@ data_combined <- data_combined %>%
 data_combined$C <- (100 - data_combined$BBCH)/100   # In this case, slope can be treated as variable (you can change it)
 data_combined <- data_combined %>% mutate(C = ifelse(is.na(C), 0.95, C))
 data_combined <- data_combined %>% filter(!is.na(soilloss) & !is.na(runoff) & !is.na(rainfall.total..mm.))
-
+data_combined_cover = data_combined
 # Define the model function: soilloss = Z * Q^X * S^Y
 
 # Function to calculate runoff based on CN
@@ -210,3 +210,120 @@ plot = ggplot(data = data_combined, aes(x = data_combined$cover,  y = data_combi
 plot(plot)
 
 
+##### OPTIMALIZATION to covers
+#data_combined_cover = data_combined
+un_list <- c("cover", "initial.cond.", "locality")
+unique_combinations <- data_combined %>%
+  group_by(across(all_of(un_list))) %>%
+  summarize(count = n(), .groups = 'drop')
+
+unique_combinations = as.matrix(unique_combinations)
+# Create an empty dataframe to store the results
+
+results_df = data.frame()
+
+# Loop through each unique combination of crop, initial.cond., and locality
+for (i in 1:nrow(unique_combinations)) {
+  #for (i in 5:10) {
+  
+  # Subset data for the current unique combination
+  subset_data <- data_combined_cover %>%
+    filter(cover == unique_combinations[i, 1], 
+           initial.cond. == unique_combinations[i, 2], 
+           locality == unique_combinations[i, 3])
+  
+  # Extract the observed rainfall and runoff for the current subset
+  P_observed <- subset_data$rainfall.total..mm.
+  Q_observed <- subset_data$runoffhighMM
+  
+  
+  # Skip this combination if there's not enough data
+  #if (length(P_observed) < 2 | length(Q_observed) < 2) {
+  # next  # Skip to the next iteration if not enough data
+  #}
+  
+  
+  print(paste("Start for combination:", i))
+  # Run the GA optimization for the current subset
+  # Run the GA optimization
+  ga_result <- ga(
+    type = "real-valued",      # We're optimizing a real number (CN)
+    fitness = fitness_function,  # Fitness function to minimize
+    lower = lower_bounds,       # Lower bound for CN
+    upper = upper_bounds,       # Upper bound for CN
+    popSize = 50,              # Population size
+    maxiter = 1000,            # Maximum number of iterations
+    run = 100                  # Number of consecutive generations without improvement
+  )
+  # Extract the optimized CN value
+  optimal_CN <- ga_result@solution
+  print(optimal_CN)
+  
+  # Append the results for the current combination to the results dataframe
+  results_df <- rbind(results_df, data.frame(crop = unique_combinations[i, 1], 
+                                             initial_cond = unique_combinations[i, 2], 
+                                             locality = unique_combinations[i, 3],
+                                             optimized_CN = optimal_CN))
+}
+
+
+
+
+# Extract the optimized parameters
+# Print the resulting dataframe with best fits
+
+colnames(results_df) = c(un_list, "CN", "Iax")
+print(results_df)
+
+data_combined_cover =  inner_join(data_combined_cover, results_df, by = un_list)
+data_combined_cover$S = (25400 / data_combined_cover$CN) - 254
+data_combined_cover$Ia = data_combined_cover$S*data_combined_cover$Iax
+data_combined_cover$Cond = data_combined_cover$rainfall.total..mm. - data_combined_cover$Ia
+# Use mapply to apply the calc_runoff function row by row
+data_combined_cover$runoffhighCN <- mapply(
+  calc_runoff, 
+  P = data_combined_cover$rainfall.total..mm.,  # Pass the rainfall column
+  CN = data_combined_cover$CN,                  # Pass the optimized CN from results_df
+  Iax = data_combined_cover$Iax                 # Pass the optimized Iax from results_df
+)
+fwrite(results_df, 'CN_Iax_optimalization_cover.csv')
+
+for (i in 1:nrow(unique_combinations)) {
+  print(i)
+  print(unique_combinations[i, 1])
+  
+  # Extract the crop, initial.cond., and locality values from the unique_combinations dataframe
+  crop_val <- as.character(unique_combinations[i, 1])
+  initial_cond_val <- as.character(unique_combinations[i, 2])
+  locality_val <- as.character(unique_combinations[i, 3])
+  
+  # Subset data_combined_cover based on the current values of crop, initial.cond., and locality
+  subset_data <- data_combined_cover %>%
+    filter(cover == crop_val, 
+           initial.cond. == initial_cond_val, 
+           locality == locality_val)
+  
+  # Create a name using the extracted values
+  name <- paste(crop_val, initial_cond_val, locality_val, sep = "_")
+  
+  # Plot the CN deviation
+  png(paste(name, "CNdev_cover.png"), width = 800, height = 600)
+  plot(subset_data$t1_t_form, subset_data$runoffhighCN, col = "red")
+  points(subset_data$t1_t_form, subset_data$runoffhighMM, col = "blue")
+  legend("topright", legend = c(name, "red = simulated, blue = measured"), pch = 1)
+  dev.off()
+  
+  # Plot the CN vs runoff
+  png(paste(name, "CN_toCN_cover.png"), width = 800, height = 600)
+  plot(subset_data$runoffhighMM, subset_data$runoffhighCN, col = "green")
+  abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)
+  legend("topright", legend = c(name), pch = 1)
+  dev.off()
+}  
+
+plot = ggplot(data = data_combined_cover, aes(x = data_combined_cover$cover,  y = data_combined_cover$CN.y, color = data_combined_cover$cover)) + #, size = dapi5mean , label = date_form))
+  geom_boxplot()+
+  geom_point()+
+  facet_grid(data_combined_cover$initial.cond. ~.)+
+  ggsave(paste(i,"CNcover.png"))
+plot(plot)
