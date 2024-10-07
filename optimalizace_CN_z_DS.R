@@ -7,7 +7,7 @@ library(GA)
 library(ggplot2)
 library(data.table)
 rmf = "d:/rm_to_word/rm.md"
-wmf = "d:/rm_to_word/"
+wmf = "d:/rm_to_word/from_md"
 rmarkdown::render(rmf, output_format = "word_document", wmf)
 # Load data
 setwd("d:/2_granty_projekty/2_Bezici/0_DS/datbaze_data/")
