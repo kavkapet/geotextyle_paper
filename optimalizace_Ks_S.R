@@ -103,7 +103,7 @@ philip_model <- function(params, Ti) {
   #browser()
   #XX = (S / (2 * sqrt(Ti))) + K
   #ifelse(time >= 0,return(0),
-  return((0.01* S / (2 * sqrt(Ti))) + K)
+  return((S*0.01 / (2 * sqrt(Ti))) + K)
   #)
   
 }
@@ -121,12 +121,10 @@ objective_function <- function(params) {
  #browser()
   CC_modeled_intensity = cumsum(inf_intensity*dTi*area)
   residuals <- subset_data$CC_Inf_m3 - CC_modeled_intensity
-  #browser()
   #plot(x =  subset_data$t1_t_form, y = subset_data$CC_Rain_m3)
   #points(x =  subset_data$t1_t_form, y = subset_data$CC_Runoff_m3, col = "blue")
   #points(x =  subset_data$t1_t_form, y = CC_modeled_intensity, col = "red")
   #plot(x =  subset_data$t1_t_form, y = residuals, col = "green")
-  #plot(x =  subset_data$t1_t_form, y = inf_intensity, col = "green")
   
   return(sum(residuals^2))
 }
@@ -134,14 +132,11 @@ objective_function <- function(params) {
 
 
 
-#lower_bounds_dry <- c(1*10^-7,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])#
-#upper_bounds_dry <- c(1*10^-5, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-#lower_bounds_wet <- c(1*10^-7, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-#upper_bounds_wet <- c(5*10^-5, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-lower_bounds_dry <- c(1*10^-10,4*10^-10) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1, 1*10^-1) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-lower_bounds_wet <- c(1*10^-7, 1*10^-10) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1, 1) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(1*10^-7,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-5, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+# Run the Genetic Algorithm to optimize S and K
+lower_bounds_wet <- c(1*10^-7, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(5*10^-5, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 
 results_df = data.frame()
 
@@ -164,13 +159,14 @@ for (xID in 394:394) {
     upper_bounds = upper_bounds_wet
     # Code to run if condition is FALSE
   }
-  #midpoints = c((mean(upper_bounds[1]+lower_bounds[1])/2), (mean(upper_bounds[2] + lower_bounds[2]))/2)
-  #initial_population <- matrix(nrow = 100, ncol = length(lower_bounds_dry))
-  initial_population[rdm, ] <- lower_bounds + runif(length(lower_bounds), 0, 1) * (upper_bounds - lower_bounds)
-    for (rdm in 1:100) {
+  midpoints = c((mean(upper_bounds[1]+lower_bounds[1])/2), (mean(upper_bounds[2] + lower_bounds[2]))/2)
+  initial_population <- matrix(nrow = 100, ncol = length(lower_bounds_dry))
+  for (rdm in 1:100) {
       #initial_population[j, ] <- midpoints + runif(length(midpoints), -midpoints, midpoints)
-      initial_population[rdm, ] <- midpoints + runif(length(midpoints), -midpoints , midpoints) # Adjust the range as needed
+      initial_population[rdm, ] <- lower_bounds + runif(length(lower_bounds), 0, 1) * (upper_bounds - lower_bounds)
+      
     }
+  
   #browser()
   ga_result <- tryCatch({
     ga(
@@ -178,14 +174,14 @@ for (xID in 394:394) {
       fitness = function(params) - objective_function(params),
       lower = lower_bounds,
       upper = upper_bounds,
-      popSize = 1000,           # Increase population size for more diversity
+      popSize = 500,           # Increase population size for more diversity
       maxiter = 2000,          # More generations for broader search
-      run = 400,               # Stop if no improvement after 100 generations
+      run = 500,               # Stop if no improvement after 100 generations
       seed = 123,              # Set seed for reproducibility
       suggestions = initial_population,  # Use a broad initial population
       pmutation = 0.3,         # Increase mutation rate for more random changes
       pcrossover = 0.6,         # Lower crossover rate to rely less on parents
-      monitor = FALSE
+      monitor = TRUE
     )
 
   }, error = function(e) {
@@ -196,7 +192,6 @@ for (xID in 394:394) {
   
  
   # Extract the optimized Ks value
-  #browser()
   summary(ga_result)
   optimal_KsS <- ga_result@solution
   #print(optimal_KsS)
@@ -227,14 +222,14 @@ data_combined <- data_combined %>%
 
 
 plotx <- ggplot() +
-  geom_point(data = data_combined, aes(x = t1_hour, y = cumulative_optimazedTotInf)) + 
-  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Rain_m3), color = "red") +
+  geom_point(data = data_combined, aes(x = t1_hour, y = cumulative_optimazedTotInf, color  = "red")) + 
+  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Rain_m3), color = "gray") +
   geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Runoff_m3), color = "blue") +
   geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Inf_m3), color = "green") +
   labs(x = "Time (hours)", y = "Infiltration Intensity (m/s)", title = "Comparison of Optimized and Measured Infiltration Intensity") +
   theme_minimal()+
   #ylim(0,0.06)+
-  facet_grid(data_combined$run.ID ~ data_combined$initial.cond.)
+  facet_grid(data_combined$run.ID ~ .)
 
 print(plotx)
 
