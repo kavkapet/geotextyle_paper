@@ -18,10 +18,31 @@ srcDTA$runoff_start_t_form <- as.POSIXct(srcDTA$time.to.runoff, format = "%H:%M:
 zero_time <- as.POSIXct("00:00:00", format = "%H:%M:%S")
 
 srcDTA$dt_t_form <- as.POSIXct(srcDTA$interval.duration, format = "%H:%M:%S")
-srcDTA$tot_time_t_form = as.POSIXct(ifelse(srcDTA$t2_t_form == zero_time| is.na(srcDTA$t2_t_form), srcDTA$runoff_start_t_form, srcDTA$dt_t_form))
+
+
+srcDTA$tot_time_t_form <- as.POSIXct(ifelse(
+  srcDTA$t2_t_form == zero_time | is.na(srcDTA$t2_t_form),
+  as.numeric(srcDTA$runoff_start_t_form),
+  as.numeric(srcDTA$dt_t_form)
+), origin = "1970-01-01", tz = "UTC")
+
+
+
+srcDTA$tot_time_t_form <- ifelse(
+  is.na(srcDTA$tot_time_t_form),
+  as.POSIXct(srcDTA$runoff_start_t_form, origin = "1970-01-01", tz = "UTC"),
+  as.POSIXct(srcDTA$tot_time_t_form, origin = "1970-01-01", tz = "UTC")
+)
 
 srcDTA$tot_time_t_form <- as.POSIXct(
-  ifelse(is.na(srcDTA$tot_time_t_form), srcDTA$runoff_start_t_form, srcDTA$tot_time_t_form))
+  ifelse(
+    is.na(srcDTA$tot_time_t_form),
+    as.numeric(srcDTA$runoff_start_t_form),
+    as.numeric(srcDTA$tot_time_t_form)
+  ), 
+  origin = "1970-01-01", 
+  tz = "UTC"
+)
 
 srcDTA$month <- format(srcDTA$TIMESTAMP, "%m")
 
@@ -132,10 +153,10 @@ objective_function <- function(params) {
 
 
 
-lower_bounds_dry <- c(1*10^-7,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-5, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(1*10^-8,4*10^-4) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-5, 1*10^-12) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(1*10^-7, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_wet <- c(1*10^-8, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 upper_bounds_wet <- c(5*10^-5, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 
 results_df = data.frame()
