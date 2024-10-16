@@ -2,6 +2,7 @@
 library(ggplot2)
 library(dplyr)
 library(GA)  # Genetic Algorithm library
+library(hydroGOF)
 
 # Load data
 setwd("d:/2_granty_projekty/2_Bezici/0_DS/datbaze_data/")
@@ -58,12 +59,16 @@ data_combined$CC_int_time_sec = as.numeric(format(data_combined$tot_time_t_form,
 
 data_combined <- data_combined %>% filter(
     !is.na(soilloss) | 
+    !is.na(interval.duration) | 
     !is.na(runoff) | 
     !is.na(rainfall.total..mm.) | 
     !is.na(rain.intensity..mm.h.1.) | 
-    !data_combined$t1_hour <= 0)
+    !data_combined$t1_hour <= 0) #|
+    #!data_combined$CC_int_time_sec <= 0)
   
 data_combined <- data_combined[!is.na(data_combined$total.discharge..l.), ]
+data_combined <- data_combined[!is.na(data_combined$dt_t_form), ]
+
 
 # Convert flow rate from l/min to mm/h
 # 1 liter = 0.001 m³
@@ -118,7 +123,7 @@ objective_function <- function(params) {
   dTi <- subset_data$CC_int_time_sec
   area = subset_data$area
   inf_intensity <- philip_model(params, Ti)
- #browser()
+#browser()
   CC_modeled_intensity = cumsum(inf_intensity*dTi*area)
   residuals <- subset_data$CC_Inf_m3 - CC_modeled_intensity
   #plot(x =  subset_data$t1_t_form, y = subset_data$CC_Rain_m3)
@@ -133,15 +138,15 @@ objective_function <- function(params) {
 
 
 lower_bounds_dry <- c(1*10^-7,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-5, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_dry <- c(1*10^-4, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
 lower_bounds_wet <- c(1*10^-7, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(5*10^-5, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(5*10^-4, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 
 results_df = data.frame()
 
 #for (xID in 1:nrow(unique_combinations)) {
-for (xID in 38:39) {
+for (xID in 39:42) {
   
   # Subset data for the current unique combination
   xxID = as.integer(unique_combinations[xID, 3])
@@ -189,7 +194,7 @@ for (xID in 38:39) {
     print(paste("Error in GA for combination", xID, ":", e$message))
     return(NULL)  # Return NULL if GA fails
   })
-  browser()
+  #browser()
   # Check if GA was successful before proceeding
   if (!is.null(ga_result)) {
     # Try to access solution safely
@@ -210,7 +215,7 @@ for (xID in 38:39) {
     results_df <- rbind(results_df, resline)
   } else {
     # Append a row with NA values to indicate failure for this combination
-    browser()
+    #browser()
     print(paste("Skipping combination", xID, "due to GA failure"))
     
     resline <- data.frame(
@@ -238,6 +243,13 @@ data_combined <- data_combined %>%
   arrange(t2) %>%  # Order rows by t2 within each run.ID group
   mutate(cumulative_optimazedTotInf = cumsum(optimazedTotInf)) %>%
   ungroup()
+# Calculate NSE for each run.ID group
+nse_results <- data_combined %>%
+  group_by(run.ID) %>%
+  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf, CC_Inf_m3), .groups = 'drop')
+
+# Join the NSE results back to the original dataframe
+data_combined <- left_join(data_combined, nse_results, by = "run.ID")
 
 
 plotx <- ggplot() +
@@ -253,8 +265,24 @@ plotx <- ggplot() +
 print(plotx)
 
 
-                 
-plot(plot)
+# Calculate NSE for each run.ID group, if you haven't already
+nse_plot <- data_combined %>%
+  group_by(run.ID, initial.cond.) %>%
+  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf, CC_Inf_m3), .groups = 'drop')
+
+# Plot the data with coloring by initial.cond
+ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
+  geom_point(size = 3) +                          # Scatter plot points with size adjustment
+#  geom_line(aes(group = initial.cond.)) +          # Connect points with lines, grouped by initial.cond
+  labs(title = "Nash-Sutcliffe Efficiency (NSE) by Run ID and Initial Condition",
+       x = "Run ID",
+       y = "Nash-Sutcliffe Efficiency (NSE)") +
+  theme_minimal() +                               # Use a clean theme
+  scale_color_manual(values = c("blue", "red")) + # Optional: specify colors for each condition
+  theme(legend.title = element_text(size = 12),   # Customize legend
+        legend.text = element_text(size = 10))
+
+
 
 results_df_to_merge =  results_df[,c(3,4,5)]
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
