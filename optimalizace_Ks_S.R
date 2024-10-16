@@ -141,7 +141,7 @@ upper_bounds_wet <- c(5*10^-5, 4*10^-3) # Upper bounds for Sorptivity (S) and Hy
 results_df = data.frame()
 
 #for (xID in 1:nrow(unique_combinations)) {
-for (xID in 394:394) {
+for (xID in 38:39) {
   
   # Subset data for the current unique combination
   xxID = as.integer(unique_combinations[xID, 3])
@@ -181,7 +181,7 @@ for (xID in 394:394) {
       suggestions = initial_population,  # Use a broad initial population
       pmutation = 0.3,         # Increase mutation rate for more random changes
       pcrossover = 0.6,         # Lower crossover rate to rely less on parents
-      monitor = TRUE
+      monitor = FALSE
     )
 
   }, error = function(e) {
@@ -189,23 +189,42 @@ for (xID in 394:394) {
     print(paste("Error in GA for combination", xID, ":", e$message))
     return(NULL)  # Return NULL if GA fails
   })
-  
+  browser()
+  # Check if GA was successful before proceeding
+  if (!is.null(ga_result)) {
+    # Try to access solution safely
+    if (!is.null(ga_result@solution)) {
+      optimal_KsS <- ga_result@solution
+    } else {
+      print("No solution found for GA, setting optimal_KsS to NA")
+      optimal_KsS <- NA  # Use NA to indicate no solution
+    }
+    
+    # Append the results for the current combination to the results dataframe
+    resline <- data.frame(
+      crop = unique_combinations[xID, 1], 
+      initial_cond = unique_combinations[xID, 2], 
+      locality = unique_combinations[xID, 3],
+      optimized_KsS = optimal_KsS
+    )
+    results_df <- rbind(results_df, resline)
+  } else {
+    # Append a row with NA values to indicate failure for this combination
+    browser()
+    print(paste("Skipping combination", xID, "due to GA failure"))
+    
+    resline <- data.frame(
+      crop = unique_combinations[xID, 1], 
+      initial_cond = unique_combinations[xID, 2], 
+      locality = unique_combinations[xID, 3],
+      optimized_KsS = NA  # Set to NA for failed GA runs
+    )
+    results_df <- rbind(results_df, resline)
  
-  # Extract the optimized Ks value
-  summary(ga_result)
-  optimal_KsS <- ga_result@solution
-  #print(optimal_KsS)
-  
-  # Append the results for the current combination to the results dataframe
-  resline = data.frame(crop = unique_combinations[xID, 1], 
-                                             initial_cond = unique_combinations[xID, 2], 
-                                             locality = unique_combinations[xID, 3],
-                                             optimized_KsS = optimal_KsS)
-  print(resline[1,])
   #browser()
-  results_df <- rbind(results_df, resline)
-  #browser()
+  }
 }
+
 # Extract the optimal parameters from the GA result
 
 results_df_to_merge =  results_df[,c(3,4,5)]
