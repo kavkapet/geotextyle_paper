@@ -1,3 +1,4 @@
+
 # Load necessary libraries
 library(ggplot2)
 library(dplyr)
@@ -107,8 +108,8 @@ philip_model <- function(params, Ti) {
   S = ifelse (S >= 0,S,0)
   #browser()
   #XX = (S / (2 * sqrt(Ti))) + K
-  #ifelse(time >= 0,return(0),
-  return((S*0.01 / (2 * sqrt(Ti))) + K)
+  #ifelse(time >= 0,return(0)
+  return((0.1*S / (2 * sqrt(Ti))) + K)
   #)
   
 }
@@ -123,154 +124,168 @@ objective_function <- function(params) {
   dTi <- subset_data$CC_int_time_sec
   area = subset_data$area
   inf_intensity <- philip_model(params, Ti)
-#browser()
-  CC_modeled_intensity = cumsum(inf_intensity*dTi*area)
-  residuals <- subset_data$CC_Inf_m3 - CC_modeled_intensity
-  #plot(x =  subset_data$t1_t_form, y = subset_data$CC_Rain_m3)
-  #points(x =  subset_data$t1_t_form, y = subset_data$CC_Runoff_m3, col = "blue")
-  #points(x =  subset_data$t1_t_form, y = CC_modeled_intensity, col = "red")
+  #browser()
+  CC_modeled_inf_m3 = cumsum(inf_intensity*dTi*area)
+  nse_value <- hydroGOF::NSE(CC_modeled_inf_m3, subset_data$CC_Inf_m3)
+  residuals <- subset_data$CC_Inf_m3 - CC_modeled_inf_m3
+#  plot(x =  subset_data$t1_t_form, y = subset_data$CC_Rain_m3)
+ # points(x =  subset_data$t1_t_form, y = subset_data$CC_Runoff_m3, col = "blue")
+  #points(x =  subset_data$t1_t_form, y = CC_modeled_inf_m3, col = "red")
+  #points(x =  subset_data$t1_t_form, y = subset_data$CC_Inf_m3, col = "green")
   #plot(x =  subset_data$t1_t_form, y = residuals, col = "green")
-  
-  return(sum(residuals^2))
+  sumres = (sum(residuals^2))
+  #nic <<- append(nic, sumres)
+  #browser()
+  return(sumres)
+  #return(nse_value)
 }
 
 
 
 
-lower_bounds_dry <- c(1*10^-7,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+lower_bounds_dry <- c(1*10^-8,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
 upper_bounds_dry <- c(1*10^-4, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(1*10^-7, 1*10^-8) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(5*10^-4, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-
+lower_bounds_wet <- c(1*10^-8, 4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(1*10^-4, 4*10^-4) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+nic = c()
 results_df = data.frame()
-
-#for (xID in 1:nrow(unique_combinations)) {
-for (xID in 39:42) {
+# Initialize an empty data frame to store the best solutions
+best_solutions_df <- data.frame(
+  #crop = character(),
+  #initial_cond = character(),
+  run.ID = numeric(),
+  best_S = numeric(),
+  best_K = numeric(),
+  best_fitness = numeric(),
+  stringsAsFactors = TRUE
+)
+unique_run_ids <- sort(unique(data_combined$run.ID))
+# Loop through the combinations
+for (xID in unique_run_ids) {
+#for (xID in 464:464) {
+  #if (unique_combinations[xID, "initial.cond."] != "very wet") {
+  #  next  # Skip this iteration if it's not "very wet"
+  #}
   
   # Subset data for the current unique combination
-  xxID = as.integer(unique_combinations[xID, 3])
-  subset_data = data_combined[data_combined$run.ID == xxID,]
-  #browser()
-  print(paste("Start for combination:", xID, nrow(subset_data), xxID))
+  #xxID <- as.integer(unique_combinations[xID, 3])
+  subset_data <- data_combined[data_combined$run.ID == xID,]
   
-    # Run the Genetic Algorithm to optimize S and K
-  if (subset_data$initial.cond[1] == "dry") {
-    lower_bounds = lower_bounds_dry
-    upper_bounds = upper_bounds_dry
-    # Code to run if condition is TRUE
+  print(paste("Start for combination:", xID, nrow(subset_data), subset_data$locality[1]))
+  
+  # Set bounds based on initial condition
+  if (subset_data$initial.cond.[1] == "dry") {
+    lower_bounds <- lower_bounds_dry
+    upper_bounds <- upper_bounds_dry
   } else {
-    lower_bounds = lower_bounds_wet
-    upper_bounds = upper_bounds_wet
-    # Code to run if condition is FALSE
+    lower_bounds <- lower_bounds_wet
+    upper_bounds <- upper_bounds_wet
   }
-  midpoints = c((mean(upper_bounds[1]+lower_bounds[1])/2), (mean(upper_bounds[2] + lower_bounds[2]))/2)
-  initial_population <- matrix(nrow = 100, ncol = length(lower_bounds_dry))
-  for (rdm in 1:100) {
-      #initial_population[j, ] <- midpoints + runif(length(midpoints), -midpoints, midpoints)
-      initial_population[rdm, ] <- lower_bounds + runif(length(lower_bounds), 0, 1) * (upper_bounds - lower_bounds)
-      
-    }
   
-  #browser()
+  # Initialize population
+  initial_population <- matrix(nrow = 500, ncol = length(lower_bounds))
+  #for (rdm in 1:500) {
+  #  initial_population[rdm, ] <- lower_bounds + runif(length(lower_bounds), 0, 1) * (upper_bounds - lower_bounds)
+  #}
+  
+  initial_population[,1] <- runif(500, lower_bounds[1], upper_bounds[1])
+  initial_population[,2] <- runif(500, lower_bounds[2], upper_bounds[2])
+  # Run the GA with tryCatch for error handling
   ga_result <- tryCatch({
     ga(
       type = "real-valued",
       fitness = function(params) - objective_function(params),
       lower = lower_bounds,
       upper = upper_bounds,
-      popSize = 500,           # Increase population size for more diversity
-      maxiter = 2000,          # More generations for broader search
-      run = 500,               # Stop if no improvement after 100 generations
-      seed = 123,              # Set seed for reproducibility
-      suggestions = initial_population,  # Use a broad initial population
-      pmutation = 0.3,         # Increase mutation rate for more random changes
-      pcrossover = 0.6,         # Lower crossover rate to rely less on parents
-      monitor = FALSE
+      popSize = 500,
+      maxiter = 500,
+      run = 1000,
+      seed = 123,
+      suggestions = initial_population,
+      pmutation = 0.02,
+      pcrossover = 0.8,
+      monitor = FALSE,
+      optimArgs = list(method = "L-BFGS-B", 
+                       poptim = 0.1,
+                       pressel = 0.25,
+                       control = list(fnscale = -1, maxit = 1000)),
+      optim = TRUE
+      
     )
-
   }, error = function(e) {
-    # Handle the error: print message and continue with the next iteration
     print(paste("Error in GA for combination", xID, ":", e$message))
-    return(NULL)  # Return NULL if GA fails
+    return(NULL)
   })
-  #browser()
-  # Check if GA was successful before proceeding
+  
+  # If GA was successful, save the best solution
   if (!is.null(ga_result)) {
-    # Try to access solution safely
-    if (!is.null(ga_result@solution)) {
-      optimal_KsS <- ga_result@solution
-    } else {
-      print("No solution found for GA, setting optimal_KsS to NA")
-      optimal_KsS <- NA  # Use NA to indicate no solution
-    }
-    
-    # Append the results for the current combination to the results dataframe
-    resline <- data.frame(
-      crop = unique_combinations[xID, 1], 
-      initial_cond = unique_combinations[xID, 2], 
-      locality = unique_combinations[xID, 3],
-      optimized_KsS = optimal_KsS
-    )
-    results_df <- rbind(results_df, resline)
-  } else {
-    # Append a row with NA values to indicate failure for this combination
+    optimal_KsS <- if (!is.null(ga_result@solution)) ga_result@solution else c(NA, NA)
+    best_fitness <- if (!is.null(ga_result@fitnessValue)) ga_result@fitnessValue else NA
     #browser()
+    # Append the best solution and fitness to the data frame
+    best_solutions_df <- rbind(best_solutions_df, data.frame(
+      #crop = unique_combinations[xID, 1], 
+      #initial_cond = unique_combinations[xID, 2], 
+      run.ID = xID,
+      best_S = optimal_KsS[2],
+      best_K = optimal_KsS[1],
+      best_fitness = best_fitness
+    ))
+  } else {
     print(paste("Skipping combination", xID, "due to GA failure"))
     
-    resline <- data.frame(
-      crop = unique_combinations[xID, 1], 
-      initial_cond = unique_combinations[xID, 2], 
-      locality = unique_combinations[xID, 3],
-      optimized_KsS = NA  # Set to NA for failed GA runs
-    )
-    results_df <- rbind(results_df, resline)
- 
-  #browser()
+    # Append NA values to indicate a failure in GA for this combination
+    best_solutions_df <- rbind(best_solutions_df, data.frame(
+      #crop = unique_combinations[xID, 1], 
+      #initial_cond = unique_combinations[xID, 2], 
+      run.ID = xID,
+      best_S = NA,
+      best_K = NA,
+      best_fitness = NA
+    
+    ))
+
   }
+
 }
+
+
+
 
 # Extract the optimal parameters from the GA result
 
-results_df_to_merge =  results_df[,c(3,4,5)]
+results_df_to_merge =  best_solutions_df
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
-data_combined$optimazedInf = philip_model(params = c(data_combined$optimized_KsS.x1, data_combined$optimized_KsS.x2), Ti = data_combined$t1_hour)
-data_combined$optimazedTotInf = data_combined$optimazedInf*data_combined$CC_int_time_sec*data_combined$area
+data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, data_combined$best_S), Ti = data_combined$t1_sec)
+data_combined$xx =  ((0.1*data_combined$best_S.x / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K.x)
+data_combined$optimazedInf_mm = data_combined$xx
+data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
 
 
 data_combined <- data_combined %>%
   group_by(run.ID) %>%
   arrange(t2) %>%  # Order rows by t2 within each run.ID group
-  mutate(cumulative_optimazedTotInf = cumsum(optimazedTotInf)) %>%
+  mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
 # Calculate NSE for each run.ID group
 nse_results <- data_combined %>%
   group_by(run.ID) %>%
-  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf, CC_Inf_m3), .groups = 'drop')
+  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
 
 # Join the NSE results back to the original dataframe
 data_combined <- left_join(data_combined, nse_results, by = "run.ID")
-
-
-plotx <- ggplot() +
-  geom_point(data = data_combined, aes(x = t1_hour, y = cumulative_optimazedTotInf, color  = "red")) + 
-  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Rain_m3), color = "gray") +
-  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Runoff_m3), color = "blue") +
-  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Inf_m3), color = "green") +
-  labs(x = "Time (hours)", y = "Infiltration Intensity (m/s)", title = "Comparison of Optimized and Measured Infiltration Intensity") +
-  theme_minimal()+
-  #ylim(0,0.06)+
-  facet_grid(data_combined$run.ID ~ .)
-
-print(plotx)
+ready = data_combined[data_combined$Inf_NSE>0.25,]
+zzz = data_combined[,c(1,5,12,49, 50, 51, 52, 54,55,56,57,58,59,60,61, 53)]
 
 
 # Calculate NSE for each run.ID group, if you haven't already
 nse_plot <- data_combined %>%
   group_by(run.ID, initial.cond.) %>%
-  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf, CC_Inf_m3), .groups = 'drop')
+  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
 
 # Plot the data with coloring by initial.cond
+
 ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
   geom_point(size = 3) +                          # Scatter plot points with size adjustment
 #  geom_line(aes(group = initial.cond.)) +          # Connect points with lines, grouped by initial.cond
@@ -278,11 +293,39 @@ ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
        x = "Run ID",
        y = "Nash-Sutcliffe Efficiency (NSE)") +
   theme_minimal() +                               # Use a clean theme
-  scale_color_manual(values = c("blue", "red")) + # Optional: specify colors for each condition
+  ylim(0,1) +
+  scale_color_manual(values = c("blue", "red", "green")) + # Optional: specify colors for each condition
   theme(legend.title = element_text(size = 12),   # Customize legend
         legend.text = element_text(size = 10))
+  
+
+plotx <- ggplot() +
+  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$cumulative_optimazedTotInf, color  = "red")) + 
+#  geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Rain_m3), color = "gray") +
+ # geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Runoff_m3), color = "blue") +
+  #geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$CC_Inf_m3), color = "green") +
+  labs(x = "Time (hours)", y = "Infiltration Intensity (m/s)", title = "Comparison of Optimized and Measured Infiltration Intensity") +
+  theme_minimal()+
+  #ylim(0,0.06)+
+  facet_grid(data_combined$run.ID ~ .)
+
+plot(plotx)
 
 
+
+########################NIC
+
+ggplot(data_combined, aes(x = t1, y = Inf_NSE_individual, color = initial.cond.)) +
+  geom_point(size = 3) +                          # Scatter plot points with size adjustment
+  #  geom_line(aes(group = initial.cond.)) +          # Connect points with lines, grouped by initial.cond
+  labs(title = "Nash-Sutcliffe Efficiency (NSE) by Run ID and Initial Condition",
+       x = "Run ID",
+       y = "Nash-Sutcliffe Efficiency (NSE)") +
+  theme_minimal() +                               # Use a clean theme
+  scale_color_manual(values = c("blue", "red", "green")) + # Optional: specify colors for each condition
+  theme(legend.title = element_text(size = 12),   # Customize legend
+        legend.text = element_text(size = 10))+
+  ylim(0,1)
 
 results_df_to_merge =  results_df[,c(3,4,5)]
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
