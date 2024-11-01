@@ -110,5 +110,5 @@ for CNxID in data_combinedCN['run.ID'].unique():
 # Convert results to a DataFrame
 best_solutions_df = pd.DataFrame(best_solutions)
 data_combinedCN = data_combinedCN.merge(best_solutions_df, on='run.ID', how='left')
-data_combinedCN.to_csv("optiamalized_K_S_CN_Ia.csv", index=False)
+data_combinedCN.to_csv("d:/2_granty_projekty/2_Bezici/0_DS/datbaze_data/optiamalized_K_S_CN_Ia.csv", index=False)
 #print(best_solutions_df)
