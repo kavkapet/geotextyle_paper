@@ -58,17 +58,23 @@ data_combined$t1_sec = as.numeric(format(data_combined$t1_t_form, "%H"))*3600 + 
 data_combined$CC_int_time_sec = as.numeric(format(data_combined$tot_time_t_form, "%H"))*3600 + as.numeric(format(data_combined$tot_time_t_form, "%M"))*60 + as.numeric(format(data_combined$tot_time_t_form, "%S")) 
 
 
-data_combined <- data_combined %>% filter(
-    !is.na(soilloss) | 
-    !is.na(interval.duration) | 
-    !is.na(runoff) | 
-    !is.na(rainfall.total..mm.) | 
-    !is.na(rain.intensity..mm.h.1.) | 
-    !data_combined$t1_hour <= 0) #|
+data_fall <- data_combined %>% filter(
+    is.na(soilloss) | 
+    is.na(interval.duration) | 
+    is.na(runoff) | 
+    is.na(rainfall.total..mm.) | 
+    is.na(rain.intensity..mm.h.1.) | 
+    data_combined$t1_hour <= 0 |
+    data_combined$soilloss < 0)
+X <- data_combined[is.na(data_combined$total.discharge..l.), ]
+Y <- data_combined[is.na(data_combined$dt_t_form), ]
+Z = bind_rows(data_fall, X, Y)
+data_fall= distinct(Z)
+
+write.csv(data_fall, "data_fall_nodata.csv")
+
     #!data_combined$CC_int_time_sec <= 0)
-  
-data_combined <- data_combined[!is.na(data_combined$total.discharge..l.), ]
-data_combined <- data_combined[!is.na(data_combined$dt_t_form), ]
+data_combined = anti_join(data_combined, data_fall)
 
 
 # Convert flow rate from l/min to mm/h
@@ -79,6 +85,18 @@ data_combined$CC_Rain_m3 = data_combined$rainfall.total..mm./1000*data_combined$
 data_combined$CC_Runoff_m3 = data_combined$total.discharge..l./1000
 data_combined$CC_Inf_m3 = data_combined$CC_Rain_m3 - data_combined$CC_Runoff_m3
 data_combined$CC_Inf_m3 = ifelse (data_combined$CC_Inf_m3 >= 0,data_combined$CC_Inf_m3,data_combined$CC_Rain_m3)
+data_combined$CC_control = data_combined$CC_Rain_m3 - data_combined$CC_Runoff_m3
+
+data_fall_minusrunoff <- data_combined %>% filter(
+  data_combined$CC_control < 0)
+write.csv(data_fall_minusrunoff, "data_fall_minusrunoff.csv")
+
+data_fall_date <- data_combined %>% filter(
+  data_combined$TIMESTAMP == c("2022-07-14"))
+write.csv(data_fall_date, "data_fall_date.csv")
+
+data_combined = anti_join(data_combined, data_fall_minusrunoff)
+data_combined = anti_join(data_combined, data_fall_date)
 
 
 data_combined$flow_rate_m3_h = data_combined$runoff * 0.001 * 60 # Convert l/min to m³/h
@@ -101,6 +119,8 @@ unique_combinations <- data_combined %>%
   group_by(across(all_of(un_list))) %>%
   summarize(count = n(), .groups = 'drop')
 # Define the Philip model for infiltration intensity
+
+write.csv(data_combined, "data_combined.csv")
 # I(t) = (S / (2 * sqrt(t))) + K
 philip_model <- function(params, Ti) {
   S <- params[2]
@@ -329,7 +349,7 @@ ggplot(data_combined, aes(x = t1, y = Inf_NSE_individual, color = initial.cond.)
 
 results_df_to_merge =  results_df[,c(3,4,5)]
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
-data_combined$optimazedInf = philip_model(params = c(data_combined$optimized_KsS.x1, data_combined$optimized_KsS.x2), Ti = data_combined$t1_hour)
+data_combined$optimazedInf = philip_model(params = c(data_combined$best_K, data_combined$best_S), Ti = data_combined$t1_hour)
 
 plot(x = data_combined$infiltration_intensity_m_s1, y = data_combined$optimazedInf)
 plot(data_combined$t1_hour, data_combined$optimazedInf)
