@@ -129,7 +129,7 @@ philip_model <- function(params, Ti) {
   #browser()
   #XX = (S / (2 * sqrt(Ti))) + K
   #ifelse(time >= 0,return(0)
-  return((0.1*S / (2 * sqrt(Ti))) + K)
+  return((S / (2 * sqrt(Ti))) + K)
   #)
   
 }
@@ -163,11 +163,11 @@ objective_function <- function(params) {
 
 
 
-lower_bounds_dry <- c(1*10^-8,4*10^-5) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-4, 1*10^-2) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(0,4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-4, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(1*10^-8, 4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1*10^-4, 4*10^-4) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_wet <- c(0, 4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(1*10^-4, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 nic = c()
 results_df = data.frame()
 # Initialize an empty data frame to store the best solutions
@@ -276,9 +276,11 @@ for (xID in unique_run_ids) {
 # Extract the optimal parameters from the GA result
 
 results_df_to_merge =  best_solutions_df
+data_combined_save = data_combined
+#data_combined =data_combined_save
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
 data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, data_combined$best_S), Ti = data_combined$t1_sec)
-data_combined$xx =  ((0.1*data_combined$best_S.x / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K.x)
+data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
 
@@ -289,24 +291,23 @@ data_combined <- data_combined %>%
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
 # Calculate NSE for each run.ID group
-nse_results <- data_combined %>%
+nse_plot =  data_combined[data_combined$run.ID != 244, ]
+nse_plot1 <- nse_plot %>%
   group_by(run.ID) %>%
   summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
+nse_plot = merge(x = nse_plot, y = nse_plot1, by = "run.ID")
 
 # Join the NSE results back to the original dataframe
-data_combined <- left_join(data_combined, nse_results, by = "run.ID")
 ready = data_combined[data_combined$Inf_NSE>0.25,]
 zzz = data_combined[,c(1,5,12,49, 50, 51, 52, 54,55,56,57,58,59,60,61, 53)]
 
 
 # Calculate NSE for each run.ID group, if you haven't already
-nse_plot <- data_combined %>%
-  group_by(run.ID, initial.cond.) %>%
-  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
+
 
 # Plot the data with coloring by initial.cond
 
-ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
+xplot = ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
   geom_point(size = 3) +                          # Scatter plot points with size adjustment
 #  geom_line(aes(group = initial.cond.)) +          # Connect points with lines, grouped by initial.cond
   labs(title = "Nash-Sutcliffe Efficiency (NSE) by Run ID and Initial Condition",
@@ -318,6 +319,8 @@ ggplot(nse_plot, aes(x = run.ID, y = Inf_NSE, color = initial.cond.)) +
   theme(legend.title = element_text(size = 12),   # Customize legend
         legend.text = element_text(size = 10))
   
+
+plot(xplot)
 
 plotx <- ggplot() +
   geom_point(data = data_combined, aes(x = t1_hour, y = data_combined$cumulative_optimazedTotInf, color  = "red")) + 
