@@ -283,6 +283,7 @@ data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, da
 data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
+write.csv(data_combined, "data_combined.csv")
 
 
 data_combined <- data_combined %>%
@@ -290,6 +291,10 @@ data_combined <- data_combined %>%
   arrange(t2) %>%  # Order rows by t2 within each run.ID group
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
+data_combined$runIN_interval = data_combined$
+write.csv(data_combined, "data_combined.csv")
+#data_combined =  read.csv(file = "data_combined.csv",sep = ",",fileEncoding = "UTF-8")
+
 # Calculate NSE for each run.ID group
 nse_plot =  data_combined[data_combined$run.ID != 244, ]
 nse_plot1 <- nse_plot %>%
@@ -488,3 +493,99 @@ plotx <- ggplot() +
   facet_grid(subset_data$initial.cond. ~.)
 
 print(plotx)
+
+##### ADD CN 
+CNdta = read.csv(file = "output.csv",sep = ",",fileEncoding = "UTF-8")
+CNdta$runID_time = paste(as.character(CNdta$run.ID), as.character(CNdta$interval..), sep = "_")
+CNdta_sel = CNdta[,c(65,58:64)]
+colnames(CNdta_sel) = c("runID_time","P_mm", "Q_measured_mm", "CN_optimized", "X_optimized", "Ia_optimized", "NSE_CN", "RMSE_CN")
+data_combined$runID_time = paste(as.character(data_combined$run.ID), as.character(data_combined$interval..), sep = "_")
+
+allDTA = merge(data_combined, CNdta_sel, by = "runID_time")
+allDTA <- allDTA %>%
+  mutate(year = substr(TIMESTAMP, 1, 4))  # 
+
+nse_plot =  allDTA[allDTA$run.ID != 244, ]
+nse_plot1 <- nse_plot %>%
+  group_by(run.ID) %>%
+  summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
+nse_plot = merge(x = nse_plot, y = nse_plot1, by = "run.ID")
+
+plotx <- ggplot() +
+  geom_point(data = nse_plot, aes(x = run.ID, y = Inf_NSE)) + 
+  geom_point(data = nse_plot, aes(x = (run.ID+0.5), y = NSE_CN), color = "red") +
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "Run ID", y = "NSE (black = Infiltration KS), red = CN)", title = "Optimalization") +
+  theme_minimal()+
+  ylim(0.25,1)+
+  facet_grid(nse_plot$initial.cond. ~.)
+
+print(plotx)
+
+# Filtrace: řádky, kde alespoň jedna hodnota je pod 0.25
+both_good <- nse_plot %>%
+  filter(Inf_NSE >= 0.25 & NSE_CN >= 0.25)
+both_goodRuns = unique(both_good$run.ID)
+srcDTARuns = unique(srcDTA$run.ID)
+
+
+
+# Filtrace: řádky, kde alespoň jedna hodnota je pod 0.25
+filtered_nse_plot <- nse_plot %>%
+  filter(Inf_NSE < 0.25 | NSE_CN < 0.25)
+
+# 1) Obě hodnoty pod 0.25
+both_below <- filtered_nse_plot %>%
+  filter(Inf_NSE < 0.25 & NSE_CN < 0.25) %>%
+  #slice_head(n = 3) %>%
+  select(run.ID)
+
+# 🥈 2) Pouze `nse1` pod 0.25
+only_KS_below <- filtered_nse_plot %>%
+  filter(Inf_NSE < 0.25 & NSE_CN >= 0.25) %>%
+  #slice_head(n = 3) %>%
+  select(run.ID)
+
+#  3) Pouze `nse2` pod 0.25
+only_CN_below <- filtered_nse_plot %>%
+  filter(NSE_CN < 0.25 & Inf_NSE >= 0.25) %>%
+  #slice_head(n = 3) %>%
+  select(run.ID)
+
+#Vystupy
+cat("🔵 ID s oběma NSE < 0.25:\n")
+print(unique(both_below$run.ID))
+
+cat("\n🟢 ID s pouze nse1 < 0.25:\n")
+print(unique(only_KS_below$run.ID))
+
+cat("\n🟠 ID s pouze nse2 < 0.25:\n")
+print(unique(only_CN_below$run.ID))
+
+fallplot <- ggplot() +
+  geom_point(data = filtered_nse_plot, aes(x = year, y = locality, colour =simulator.ID)) + 
+  #geom_point(data = filtered_nse_plot, aes(x = (run.ID+0.5), y = NSE_CN), color = "red") +
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "Run ID", y = "NSE (black = Infiltration KS), red = CN)", title = "Optimalization") +
+  theme_minimal()+
+  #ylim(0.25,1)+
+  facet_grid(filtered_nse_plot$initial.cond. ~.)
+
+print(fallplot)
+
+fall_size <- filtered_nse_plot %>%
+  group_by(year, locality, simulator.ID, initial.cond.) %>%
+  summarise(count = n(), .groups = "drop")
+
+fallplot_size <- ggplot(fall_size) +
+  geom_point(aes(x = year, y = locality, colour = as.character(simulator.ID), size = count)) + 
+  labs(
+    x = "Year",
+    y = "Locality",
+    title = "Optimization (Size = Number of Rows)"
+  ) +
+  theme_minimal() +
+  facet_grid(initial.cond. ~ .) +  # Používání dat přímo z plot_data
+  scale_size_continuous(name = "Count")  # Legenda velikosti bodů
+plot(fallplot_size)
+
