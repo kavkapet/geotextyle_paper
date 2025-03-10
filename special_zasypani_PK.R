@@ -3,16 +3,16 @@ library(tidyr)
 library(dplyr)
 library(ggplot2)
 library(shiny)
-library(skimr)
+#library(skimr)
 library(stringr)
 library(tidyr)
 library(tools)
 library(dplyr)
 library(ggplot2)
 library(zoo)
-library(gridExtra)
-library(psych)
-library(gdata)
+#library(gridExtra)
+#library(psych)
+#library(gdata)
 library(tibble)
 require(data.table)
 library(tidyr)
@@ -20,17 +20,16 @@ library(tools)
 library(dplyr)
 library(ggplot2)
 library(zoo)
-library(gridExtra)
-library(psych)
-library(gdata)
+#library(gridExtra)
+#library(gdata)
 library(tibble)
-library(corrplot)
+#library(corrplot)
 require(data.table)
 library(cluster)
-library(factoextra)
+#library(factoextra)
 #library(ggsankey)
-library(clusterCrit)
-library(forcats)
+#library(clusterCrit)
+#library(forcats)
 # library(DT)
 
 ##### ?TEN? DAT ######
@@ -41,7 +40,7 @@ setwd("d:/5_papers/2023_zasypane_geotextilie/ruzne_zasypani/")
 
 
 ### Na?ti dataset s pr?b?hy odtok? a koncentrac?
-qsres <- read.csv("zasypani_odtoky.csv", stringsAsFactors = F, sep = ";", dec = ".", header = T)
+qsres <- read.csv("zasypani_odtoky_MN.csv", stringsAsFactors = F, sep = ";", dec = ".", header = T)
 #all_in <- read.csv("xlab_data_clean.csv", stringsAsFactors = F)
 grain = read.csv("d:/5_papers/2023_zasypane_geotextilie/_dta_work/grain_size_export.csv", stringsAsFactors = F, sep = ";", dec = ",", header = T)
 
@@ -114,7 +113,13 @@ for (id in names){
   max_row <- sl %>% filter(t2_min == max(t2_min, na.rm = TRUE))
   maxrun <- rbind(maxrun, max_row)
 }
-
+qsresnF$poc_stav_int_time = paste(qsresnF$poc_stav_int, qsresnF$interval, sep = "_" )
+uhor_only = qsresnF[qsresnF$opat_typ_grain == "BSOIL",]
+uhor_only <- uhor_only[, c("poc_stav_int_time", "S2cum_g", "Qcum_l")]
+colnames(uhor_only) = c("poc_stav_int_time", "BareS2cum_g", "BareQcum_l")
+qsresnF <- merge(qsresnF, uhor_only, by = "poc_stav_int_time", all.x = TRUE)
+qsresnF$SLR = qsresnF$S2cum_g/qsresnF$BareS2cum_g
+qsresnF$WLR = qsresnF$Qcum_l/qsresnF$BareQcum_l
 
 grain <- grain %>%
   mutate(poc_stav_en = recode(init_state,
@@ -186,10 +191,11 @@ plot(xxplot)
 
 xxplot_Q  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
   geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
-  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
+  geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l, colour = qsresnF_sel$opat_typ_grain), method="loess") +
+  #geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$perkolace*10), method="loess", col = "blue", size = 1) +
   facet_grid (poc_stav_int ~ opat_typ_grain) +
   labs(title = "Runoff", x = "Time", y = "Cumulative runoff [l]")+
-  
+   
   theme_bw()
 
 
@@ -197,18 +203,48 @@ xxplot_Q  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresn
 
 plot(xxplot_Q)
 
+
+xxplot_PQ  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+   #geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
+   #geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l, colour = qsresnF_sel$opat_typ_grain), method="loess") +
+   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$perkolace, colour = qsresnF_sel$opat_typ_grain), method="loess", size = 1) +
+   facet_grid (poc_stav_int ~ opat_typ_grain) +
+   labs(title = "Percolation", x = "Time", y = "Cumulative percolation [l]")+
+   
+   theme_bw()
+
+plot(xxplot_PQ)
+
+
 xxplot_S  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
-  geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g * scaleFactor), method="loess", col="grey", show.legend = TRUE) +
-  geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g * scaleFactor), method="loess", col="grey") +
-  facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
-  ylim (0, 1000) +
-  labs(title = "Soil loss", x = "Time", y = "Cumulative soil loss [g]")+
-  theme_bw()
-
-
-
+   geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g), method="loess", col="grey", show.legend = TRUE) +
+   geom_point(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g, colour = qsresnF_sel$opat_typ_grain), method="loess") +
+   facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+   #ylim (0, 37000) +
+   labs(title = "Soil loss", x = "Time", y = "Cumulative soil loss [g]")+
+   theme_bw()
 
 plot(xxplot_S)
+
+qsresnF_selNoBare = qsresnF_sel[qsresnF_sel$opat_typ_grain != "BSOIL",]
+xxplot_SLR  = ggplot() + #(qsresnF_selNoBare$cas_do_odtok + (qsresnF_selNoBare$t1_min + qsresnF_selNoBare$t2_min)/2)))+
+   geom_line(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$SLR), method="loess", col="grey", show.legend = TRUE) +
+   geom_point(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$SLR, colour = qsresnF_selNoBare$opat_typ_grain), method="loess") +
+   facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+   ylim (0, 4) +
+   labs(title = "SLR", x = "Time", y = "Soil loss ratio")+
+   theme_bw()
+plot(xxplot_SLR)
+
+xxplot_WLR  = ggplot() + #(qsresnF_selNoBare$cas_do_odtok + (qsresnF_selNoBare$t1_min + qsresnF_selNoBare$t2_min)/2)))+
+   geom_line(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$WLR), method="loess", col="grey", show.legend = TRUE) +
+   geom_point(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$WLR, colour = qsresnF_selNoBare$opat_typ_grain), method="loess") +
+   facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+   #ylim (0, 1) +
+   labs(title = "Runoff coeficient", x = "Time", y = "Runoff coeficient [-]")+
+   theme_bw()
+plot(xxplot_WLR)
+
 scaleFactor_grain2 <- max(qsresnF_sel$Qcum_l) / 80
 
 xxplot2 <- ggplot() +
