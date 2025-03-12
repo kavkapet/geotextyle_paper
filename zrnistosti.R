@@ -17,9 +17,11 @@ setwd("d:/5_papers/2023_zasypane_geotextilie/_dta_work/")
 #grainsize_distribution
 #grain <- read.csv("S:/Private/_PROJEKTY/2017_Strix_svahy/1_reseni_projektu/00_vyhodnoceni/leden2021finale/ruzne_zasypani/laser_data/143Strix_labDS_vse2.csv", sep = ";", stringsAsFactors = F, header = T)
 grain = read.csv("zasypani_zrnitosti.csv", sep = ";", header = T, check.names = F)
+code_opr = read.csv("code.csv", sep = ";", header = T, check.names = F)
 xx =colnames(grain)
 xx[3] = "misto"
 colnames(grain) = xx
+
 grain <- grain %>%
   mutate(variant = recode(variant,
                                  "bare_soil" = "BSOIL",
@@ -32,16 +34,23 @@ grain <- grain %>%
 
 grain_nocumu =  grain[,1:14]
 # Convert cumulative data (cols 15 to 115) to non-cumulative
-grain_nocumu[, 15:115] <- t(apply(grain[, 15:115], 1, function(x) c(x[1], diff(x))))
-colnames(grain_nocumu) = colnames(grain)
-# Filtrujeme řádky podle hodnoty ve sloupci "record"
 
-grain_nocumu$PKcode = paste(grain_nocumu$variant, grain_nocumu$intensity,
-                            grain_nocumu$init_state, sep = "_")
 grain_nocumu$SampleName_variant = paste(grain_nocumu$`Sample Name`, grain_nocumu$variant, grain_nocumu$init_state, sep = "_")
 
+grain_nocumu = merge(grain_nocumu, code_opr, by.x = "SampleName_variant", by.y = "oldcode")
+grain_nocumu = grain_nocumu[,c(1:3,5:10,12:17, 19:20)]
+
+grain_nocumu[, 18:118] <- t(apply(grain[, 15:115], 1, function(x) c(x[1], diff(x))))
+xx = colnames(grain)
+xx = xx[15:115]
+yy = colnames(grain_nocumu[1:17])
+zz = append (yy,xx)
+
+colnames(grain_nocumu) = zz
+
+
 # Vybereme sloupce, které chceme zprůměrovat
-columns_to_average <- names(grain_nocumu)[15:115]  # Sloupce 15-115
+columns_to_average <- names(grain_nocumu)[18:118]  # Sloupce 15-115
 
 # PRVNÍCH 5 řádků pro každou hodnotu sample_name
 mean_before <- grain_nocumu %>%
@@ -62,33 +71,36 @@ mean_after$bef_after = "after"
 
 # Spojíme oba výsledky do jednoho datového rámce
 mean_all <- bind_rows(mean_before, mean_after)
-mean_all <- mean_all %>%
-  separate(SampleName_variant, into = c("misto", "Date", "sim", "slope", "intensity", 
-                                        "init_stateCZ", "surface", "init_state"), sep = "_", remove = FALSE)
-mean_all$slope = as.numeric(mean_all$slope)
-mean_all$intensity = as.numeric(mean_all$intensity)
+mean_all = merge(code_opr, mean_all, by.y = "SampleName_variant", by.x = "oldcode")
+#mean_all <- mean_all %>%
+ # separate(SampleName_variant, into = c("misto", "Date", "sim", "slope", "intensity", 
+  #                                      "init_stateCZ", "opatreni", "init_state"), sep = "_", remove = FALSE)
+#mean_all$slope = as.numeric(mean_all$slope)
+#mean_all$intensity = as.numeric(mean_all$intensity)
 
 grain_mean_long <- mean_all %>%
-  pivot_longer(cols = 10:110,
+  pivot_longer(cols = 7:107,
                names_to = "particlesize", 
                values_to = "percentage")# %>%
 
-for (i in unique(grain_mean_long$surface)){
+for (i in unique(grain_mean_long$opatreni)){
     print(i)
-    xx = grain_mean_long[grain_mean_long$surface == i,]
+    xx = grain_mean_long[grain_mean_long$opatreni == i,]
     print(unique(xx$SampleName_variant))
-    toplot = ggplot(grain_mean_long[grain_mean_long$surface == i,], aes(x = as.numeric(particlesize),
-                                          y = percentage, color = init_state, linetype = bef_after)) +
+    toplot = ggplot(grain_mean_long[grain_mean_long$opatreni == i,], aes(x = as.numeric(particlesize),
+                                          y = percentage, color = odber_i_stav, linetype = bef_after)) +
               geom_line(size = 1) +
               #xlim(0, 630) +
               scale_x_log10() +  # Logaritmická osa x pro lepší přehlednost
-              labs(x = "Velikost částic (μm)", y = "(%)", title = paste(i, "Průběh křivky zrnitosti")) +
-              facet_grid(intensity ~ .)  +# Rozdělení do panelů podle dvou faktorů
+              labs(x = "Grain size (μm)", y = "(%)", title = paste(i, " - Grain Size")) +
+              facet_grid(intenzita_opravena ~ bef_after)  +# Rozdělení do panelů podle dvou faktorů
               scale_x_log10(breaks = c(50, 630, 2000))+
               theme_minimal()
               
             
     plot(toplot)
+    ggsave(paste(print(i),".png"))
+    ggsave(paste(print(i),".jpg"))
   
       }
 
@@ -118,8 +130,8 @@ grain_long_sel = grain_long[grain_long$intensity == 60,]
 grain_long_sel = grain_long_sel[grain_long_sel$init_state == "D1",]
 grain_long_sel = grain_long_sel[grain_long_sel$variant == "bare_soil",]
 
-grain_mean_longs = grain_mean_long[grain_mean_long$surface =="BSOIL",]
-ggplot(grain_mean_longs, aes(x = as.numeric(particlesize), y = percentage, color = surface, linetype = bef_after)) +
+grain_mean_longs = grain_mean_long[grain_mean_long$opatreni =="BSOIL",]
+ggplot(grain_mean_longs, aes(x = as.numeric(particlesize), y = percentage, color = opatreni, linetype = bef_after)) +
   geom_line(size = 1) +
   scale_x_log10() +  # Logaritmická osa x pro lepší přehlednost
   labs(x = "Velikost částic (μm)", y = "(%)", title = "Průběh křivky zrnitosti") +
