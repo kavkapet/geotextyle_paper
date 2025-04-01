@@ -293,7 +293,7 @@ data_combined <- data_combined %>%
   ungroup()
 data_combined$runIN_interval = data_combined$
 write.csv(data_combined, "data_combined.csv")
-#data_combined =  read.csv(file = "data_combined.csv",sep = ",",fileEncoding = "UTF-8")
+data_combined =  read.csv(file = "data_combined.csv",sep = ",",fileEncoding = "UTF-8")
 
 # Calculate NSE for each run.ID group
 nse_plot =  data_combined[data_combined$run.ID != 244, ]
@@ -502,6 +502,8 @@ colnames(CNdta_sel) = c("runID_time","P_mm", "Q_measured_mm", "CN_optimized", "X
 data_combined$runID_time = paste(as.character(data_combined$run.ID), as.character(data_combined$interval..), sep = "_")
 
 allDTA = merge(data_combined, CNdta_sel, by = "runID_time")
+crop_aggregate = read.csv("crops.csv", sep = ";")
+allDTA = merge(allDTA, crop_aggregate, by.x = "crop", by.y = "crops")
 allDTA <- allDTA %>%
   mutate(year = substr(TIMESTAMP, 1, 4))  # 
 
@@ -511,16 +513,43 @@ nse_plot1 <- nse_plot %>%
   summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
 nse_plot = merge(x = nse_plot, y = nse_plot1, by = "run.ID")
 
+#### Plot NSE, dot
+
 plotx <- ggplot() +
-  geom_point(data = nse_plot, aes(x = run.ID, y = Inf_NSE)) + 
-  geom_point(data = nse_plot, aes(x = (run.ID+0.5), y = NSE_CN), color = "red") +
+  geom_point(data = nse_plot, aes(x = run.ID, y = (2 - Inf_NSE))) + 
+  geom_point(data = nse_plot, aes(x = (run.ID+0.5), y = NSE_CN, colour = nse_plot$crop_group)) +
   #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
-  labs(x = "Run ID", y = "NSE (black = Infiltration KS), red = CN)", title = "Optimalization") +
+  labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
   theme_minimal()+
-  ylim(0.25,1)+
-  facet_grid(nse_plot$initial.cond. ~.)
+  ylim(0.25,1.75)+
+  facet_grid(nse_plot$initial.cond. ~ crop_group)
 
 print(plotx)
+#### Plot NSE, boxplot
+ploty <- ggplot() +
+  geom_boxplot(data = nse_plot, aes(x = 1.2 , y = Inf_NSE)) + 
+    geom_boxplot(data = nse_plot, aes(x = 1, y = NSE_CN, colour = nse_plot$crop_group)) +
+  
+    #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
+  theme_minimal()+
+  ylim(0.25,1)+
+  facet_grid(nse_plot$initial.cond. ~ crop_group)
+
+print(ploty)
+
+#### Plot CN and Ia
+ploty <- ggplot() +
+  geom_boxplot(data = nse_plot, aes(x = 1.2 , y = nse_plot$best_S, colour = nse_plot$crop_group)) + 
+  #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
+  
+    #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
+  theme_minimal()+
+  #ylim(0.,10^-6)+
+  facet_grid(nse_plot$initial.cond. ~ crop_group)
+
+print(ploty)
 
 # Filtrace: řádky, kde alespoň jedna hodnota je pod 0.25
 both_good <- nse_plot %>%
@@ -588,4 +617,45 @@ fallplot_size <- ggplot(fall_size) +
   facet_grid(initial.cond. ~ .) +  # Používání dat přímo z plot_data
   scale_size_continuous(name = "Count")  # Legenda velikosti bodů
 plot(fallplot_size)
+
+
+
+#####curbes z GTP
+# Načtení potřebných knihoven
+library(dplyr)
+library(readr)
+
+# Načtení datasetu
+data <- read_csv2("runoff_sediment_intervals_20240925_en.csv")
+
+# Definice skupin a přiřazení hodnot
+group_definitions <- list(
+  "holá půda" = c("cultivated fallow"),
+  "širokořádkové plodiny" = c("corn", "sunflower", "sugar beet", "potato", "soybean"),
+  "úzkořádkové plodiny" = c("broad bean", "proso millet", "wheat", "barley", "oat", "rye"),
+  "tráva" = c("grass", "meadow", "pasture"),
+  "geotextilie" = c("geotextile", "geotextile A", "geotextile B", "geotextile C", "Enkamat 7020 filled", "Fortrac 3D", "Enkamat", "Fortrac")
+)
+
+# Vytvoření zpětného mapování: každá plodina -> skupina
+reverse_mapping <- list()
+for (group in names(group_definitions)) {
+  crops <- group_definitions[[group]]
+  for (crop in crops) {
+    reverse_mapping[[crop]] <- group
+  }
+}
+
+# Přidání sloupce 'crop_group_label' do datasetu
+data <- data %>%
+  mutate(
+    crop_group_label = ifelse(
+      crop %in% names(reverse_mapping),
+      paste0(reverse_mapping[crop], " (", paste(group_definitions[[reverse_mapping[crop]]], collapse = ", "), ")"),
+      paste0("ostatní (", crop, ")")
+    )
+  )
+
+# Náhled prvních řádků s novým sloupcem
+head(data[c("crop", "crop_group_label")])
 

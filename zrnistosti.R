@@ -106,6 +106,78 @@ for (i in unique(grain_mean_long$opatreni)){
 
 
 
+
+####A pro kumulativni
+
+grain_opr =  grain[,1:14]
+# Convert cumulative data (cols 15 to 115) to non-cumulative
+
+grain_opr$SampleName_variant = paste(grain_opr$`Sample Name`, grain_opr$variant, grain_opr$init_state, sep = "_")
+
+grain_opr = merge(grain_opr, code_opr, by.x = "SampleName_variant", by.y = "oldcode")
+grain_opr = grain_opr[,c(1:3,5:10,12:17, 19:20)]
+
+grain_opr[, 18:118] <- grain[, 15:115]
+
+# Vybereme sloupce, které chceme zprůměrovat
+columns_to_average <- names(grain_opr)[18:118]  # Sloupce 15-115
+
+# PRVNÍCH 5 řádků pro každou hodnotu sample_name
+mean_before <- grain_opr %>%
+  group_by(SampleName_variant) %>%
+  slice_head(n = 5) %>%  # Vybereme prvních 5 řádků v každé skupině
+  summarise(across(all_of(columns_to_average), mean, na.rm = TRUE)) %>%
+  mutate(Group = "First 5")  # Označíme tuto skupinu
+
+# POSLEDNÍCH 5 řádků pro každou hodnotu sample_name
+mean_after <- grain_opr %>%
+  group_by(SampleName_variant) %>%
+  slice_tail(n = 5) %>%  # Vybereme posledních 5 řádků v každé skupině
+  summarise(across(all_of(columns_to_average), mean, na.rm = TRUE)) %>%
+  mutate(Group = "Last 5")  # Označíme tuto skupinu
+
+mean_before$bef_after = "before"
+mean_after$bef_after = "after"
+
+# Spojíme oba výsledky do jednoho datového rámce
+mean_all <- bind_rows(mean_before, mean_after)
+mean_all = merge(code_opr, mean_all, by.y = "SampleName_variant", by.x = "oldcode")
+#mean_all <- mean_all %>%
+# separate(SampleName_variant, into = c("misto", "Date", "sim", "slope", "intensity", 
+#                                      "init_stateCZ", "opatreni", "init_state"), sep = "_", remove = FALSE)
+#mean_all$slope = as.numeric(mean_all$slope)
+#mean_all$intensity = as.numeric(mean_all$intensity)
+
+grain_opr_mean_long <- mean_all %>%
+  pivot_longer(cols = 7:107,
+               names_to = "particlesize", 
+               values_to = "percentage")# %>%
+
+for (i in unique(grain_opr_mean_long$opatreni)){
+  print(i)
+  xx = grain_opr_mean_long[grain_mean_long$opatreni == i,]
+  print(unique(xx$SampleName_variant))
+  toplot = ggplot(grain_opr_mean_long[grain_mean_long$opatreni == i,], aes(x = as.numeric(particlesize),
+                                                                       y = percentage, color = odber_i_stav, linetype = bef_after)) +
+    geom_line(size = 1) +
+    #xlim(0, 630) +
+    scale_x_log10() +  # Logaritmická osa x pro lepší přehlednost
+    labs(x = "Grain size (μm)", y = "(%)", title = paste(i, " - Grain Size")) +
+    facet_grid(intenzita_opravena ~ bef_after)  +# Rozdělení do panelů podle dvou faktorů
+    scale_x_log10(breaks = c(50, 630, 2000))+
+    theme_minimal()
+  
+  
+  plot(toplot)
+  ggsave(paste(print(i),".png"))
+  ggsave(paste(print(i),".jpg"))
+  
+}
+
+
+
+
+
 # Transformace dat - převod širokého formátu na dlouhý
 grain_long <- grain_nocumu %>%
   pivot_longer(cols = 15:115,
