@@ -4,6 +4,7 @@ library(ggplot2)
 library(dplyr)
 library(GA)  # Genetic Algorithm library
 library(hydroGOF)
+library(soiltexture)
 
 # Load data
 setwd("d:/2_granty_projekty/2_Bezici/0_DS/datbaze_data/")
@@ -120,7 +121,7 @@ unique_combinations <- data_combined %>%
   summarize(count = n(), .groups = 'drop')
 # Define the Philip model for infiltration intensity
 
-write.csv(data_combined, "data_combined.csv")
+write.csv(data_combined, "data_combined01.csv")
 # I(t) = (S / (2 * sqrt(t))) + K
 philip_model <- function(params, Ti) {
   S <- params[2]
@@ -138,8 +139,8 @@ philip_model <- function(params, Ti) {
 # It calculates the sum of squared residuals between observed and modeled infiltration intensity
 objective_function <- function(params) {
   #browser()
-  S <- params[2]
-  K <- params[1]
+  S <- params[1]
+  K <- params[2]
   Ti <- subset_data$t1_sec
   dTi <- subset_data$CC_int_time_sec
   area = subset_data$area
@@ -164,10 +165,10 @@ objective_function <- function(params) {
 
 
 lower_bounds_dry <- c(0,4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-4, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_dry <- c(1*10^-3, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
 lower_bounds_wet <- c(0, 4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1*10^-4, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(1*10^-3, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 nic = c()
 results_df = data.frame()
 # Initialize an empty data frame to store the best solutions
@@ -283,7 +284,7 @@ data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, da
 data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
-write.csv(data_combined, "data_combined.csv")
+write.csv(data_combined, "data_combined02_S003.csv")
 
 
 data_combined <- data_combined %>%
@@ -291,9 +292,9 @@ data_combined <- data_combined %>%
   arrange(t2) %>%  # Order rows by t2 within each run.ID group
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
-data_combined$runIN_interval = data_combined$
-write.csv(data_combined, "data_combined.csv")
-data_combined =  read.csv(file = "data_combined.csv",sep = ",",fileEncoding = "UTF-8")
+#data_combined$runIN_interval = data_combined$
+write.csv(data_combined, "data_combined_S003.csv")
+data_combined =  read.csv(file = "data_combined_S003.csv",sep = ",",fileEncoding = "UTF-8")
 
 # Calculate NSE for each run.ID group
 nse_plot =  data_combined[data_combined$run.ID != 244, ]
@@ -494,41 +495,123 @@ plotx <- ggplot() +
 
 print(plotx)
 
-##### ADD CN 
-CNdta = read.csv(file = "output.csv",sep = ",",fileEncoding = "UTF-8")
+##### ADD CN
+#from this path: "D:\_GIT\1_ArcGIS_tools\GA_SCSCN_in_python.py"
+CNdta = read.csv(file = "output_new.csv",sep = ",",fileEncoding = "UTF-8")
 CNdta$runID_time = paste(as.character(CNdta$run.ID), as.character(CNdta$interval..), sep = "_")
-CNdta_sel = CNdta[,c(65,58:64)]
+
+CNdta_sel = CNdta[,c("runID_time","P_mm", "Q_measured_mm", "CN_optimized", "X_optimized", "Ia_optimized", "NSE", "RMSE")]
 colnames(CNdta_sel) = c("runID_time","P_mm", "Q_measured_mm", "CN_optimized", "X_optimized", "Ia_optimized", "NSE_CN", "RMSE_CN")
+
 data_combined$runID_time = paste(as.character(data_combined$run.ID), as.character(data_combined$interval..), sep = "_")
 
-allDTA = merge(data_combined, CNdta_sel, by = "runID_time")
+allDTA = merge(data_combined, CNdta_sel, by.x = "runID_time", by.y = "runID_time")
 crop_aggregate = read.csv("crops.csv", sep = ";")
 allDTA = merge(allDTA, crop_aggregate, by.x = "crop", by.y = "crops")
 allDTA <- allDTA %>%
   mutate(year = substr(TIMESTAMP, 1, 4))  # 
 
-nse_plot =  allDTA[allDTA$run.ID != 244, ]
+colnames(allDTA)[colnames(allDTA) == "X.0..0.002mm."] <- "CLAY"
+colnames(allDTA)[colnames(allDTA) == "X.0.002..0.063mm."] <- "SILT"
+colnames(allDTA)[colnames(allDTA) == "X.0.063..2mm."] <- "SAND"
+
+allDTA <- allDTA %>%
+  mutate(
+    CLAY = ifelse(locality == "Jirkov (STRIX)", 38.4, CLAY),
+    SILT = ifelse(locality == "Jirkov (STRIX)", 31.5, SILT),
+    SAND = ifelse(locality == "Jirkov (STRIX)", 30.1, SAND)
+  )
+
+risuty_means <- allDTA %>%
+  filter(grepl("Řisuty", locality)) %>%
+  filter(!is.na(CLAY) & !is.na(SILT) & !is.na(SAND)) %>%
+  summarise(
+    CLAY = mean(CLAY),
+    SILT = mean(SILT),
+    SAND = mean(SAND)
+  )
+
+allDTA <- allDTA %>%
+  mutate(
+    CLAY = ifelse(grepl("Řisuty", locality) & is.na(CLAY), risuty_means$CLAY, CLAY),
+    SILT = ifelse(grepl("Řisuty", locality) & is.na(SILT), risuty_means$SILT, SILT),
+    SAND = ifelse(grepl("Řisuty", locality) & is.na(SAND), risuty_means$SAND, SAND)
+  )
+
+soil_tex <- allDTA[, c("runID_time", "locality", "crop_group", "CLAY", "SILT", "SAND")]
+soil_tex_clean <- soil_tex %>%
+  filter(!is.na(CLAY) & !is.na(SILT) & !is.na(SAND))
+
+soil_tex_nodata <- soil_tex %>%
+  filter(is.na(CLAY) & is.na(SILT) & is.na(SAND))
+
+unique(soil_tex_clean$locality)
+unique(soil_tex_nodata$locality)
+
+# Classify USDA soil texture
+soil_tex_clean$USDA_class <- TT.points.in.classes(
+  tri.data = soil_tex_clean,
+  class.sys = "USDA.TT",
+  PiC.type = "t"   # triangle method
+)
+
+# Factor and color mapping
+locality_f <- as.factor(soil_tex_clean$locality)
+crop_group_f <- as.factor(soil_tex_clean$crop_group)
+palette_L <- rainbow(length(levels(locality_f)))
+barvy_L  <- palette[as.numeric(locality_f)]
+palette_C <- rainbow(length(levels(crop_group_f)))
+barvy_C  <- palette[as.numeric(crop_group_f)]
+
+# 2. Define the triangle class system
+class_system <- "USDA.TT"
+
+TT.plot(
+  class.sys = "USDA.TT",
+  tri.data = soil_tex_clean[, c("CLAY", "SILT", "SAND")],
+  main = "Soil Texture by Locality",
+  pch = 22,
+  col = barvy_C,
+  #bg = barvy,  # background color by crop
+  grid.show = TRUE
+)
+
+legend("topright",
+       legend = levels(crop_group_f),
+       pt.bg = palette_C,
+       pch = 21,
+       title = "Crop group")
+# Add result back to original table
+allDTA1 = merge(allDTA, soil_tex_clean, by.x = "runID_time", by.y = "runID_time", all.x = TRUE)
+allDTA1 <- allDTA1 %>%
+  mutate(USDA_class = ifelse(is.na(USDA_class), "NoData", USDA_class))
+unique(allDTA1$USDA_class)
+
+nse_plot =  allDTA1[allDTA1$run.ID != 244, ]
 nse_plot1 <- nse_plot %>%
   group_by(run.ID) %>%
   summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
 nse_plot = merge(x = nse_plot, y = nse_plot1, by = "run.ID")
 
+
 #### Plot NSE, dot
 
 plotx <- ggplot() +
-  geom_point(data = nse_plot, aes(x = run.ID, y = (2 - Inf_NSE))) + 
-  geom_point(data = nse_plot, aes(x = (run.ID+0.5), y = NSE_CN, colour = nse_plot$crop_group)) +
+  #geom_point(data = nse_plot, aes(x = run.ID, y = (2 - Inf_NSE))) + 
+  #geom_point(data = nse_plot, aes(x = (run.ID+0.5), y = nse_plot$best_S, colour = nse_plot$crop_group.x)) +
+  geom_boxplot(data = nse_plot, aes(y = nse_plot$best_S, colour = nse_plot$crop_group.x)) +
+  
   #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
   labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
   theme_minimal()+
-  ylim(0.25,1.75)+
-  facet_grid(nse_plot$initial.cond. ~ crop_group)
+  #ylim(0.25,1.75)+
+  facet_grid(nse_plot$initial.cond. ~ USDA_class)
 
 print(plotx)
 #### Plot NSE, boxplot
 ploty <- ggplot() +
   geom_boxplot(data = nse_plot, aes(x = 1.2 , y = Inf_NSE)) + 
-    geom_boxplot(data = nse_plot, aes(x = 1, y = NSE_CN, colour = nse_plot$crop_group)) +
+  geom_boxplot(data = nse_plot, aes(x = 1, y = NSE_CN, colour = nse_plot$crop_group)) +
   
     #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
   labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
@@ -538,18 +621,23 @@ ploty <- ggplot() +
 
 print(ploty)
 
-#### Plot CN and Ia
-ploty <- ggplot() +
-  geom_boxplot(data = nse_plot, aes(x = 1.2 , y = nse_plot$best_S, colour = nse_plot$crop_group)) + 
+#### Plot CN and S
+
+plotv <- ggplot() +
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S, colour = nse_plot$crop_group.x)) + 
+  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S), alpha = 0.5) + 
+  
   #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
   
-    #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
-  labs(x = "Run ID", y = "NSE (black = Infiltration KS, red = CN)", title = "Optimalization") +
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "CN value", y = "Phillip Sorbtivity)", title = "Optimalization for CN and S ") +
   theme_minimal()+
   #ylim(0.,10^-6)+
-  facet_grid(nse_plot$initial.cond. ~ crop_group)
+  facet_grid(nse_plot$initial.cond. ~ crop_group.x)
 
-print(ploty)
+print(plotv)
+
+
 
 # Filtrace: řádky, kde alespoň jedna hodnota je pod 0.25
 both_good <- nse_plot %>%
