@@ -164,11 +164,11 @@ objective_function <- function(params) {
 
 
 
-lower_bounds_dry <- c(0,4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-3, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(0,4*10^-9) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-2, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(0, 4*10^-15) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1*10^-3, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_wet <- c(0, 4*10^-9) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(1*10^-2, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 nic = c()
 results_df = data.frame()
 # Initialize an empty data frame to store the best solutions
@@ -284,7 +284,7 @@ data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, da
 data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
-write.csv(data_combined, "data_combined02_S003.csv")
+write.csv(data_combined, "data_combined02_S02.csv")
 
 
 data_combined <- data_combined %>%
@@ -293,7 +293,7 @@ data_combined <- data_combined %>%
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
 #data_combined$runIN_interval = data_combined$
-write.csv(data_combined, "data_combined_S003.csv")
+write.csv(data_combined, "data_combined_S02.csv")
 data_combined =  read.csv(file = "data_combined_S003.csv",sep = ",",fileEncoding = "UTF-8")
 
 # Calculate NSE for each run.ID group
@@ -624,8 +624,8 @@ print(ploty)
 #### Plot CN and S
 
 plotv <- ggplot() +
-  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S, colour = nse_plot$crop_group.x)) + 
-  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S), alpha = 0.5) + 
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K, colour = nse_plot$crop_group.x)) + 
+  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K), alpha = 0.5) + 
   
   #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
   
@@ -633,6 +633,7 @@ plotv <- ggplot() +
   labs(x = "CN value", y = "Phillip Sorbtivity)", title = "Optimalization for CN and S ") +
   theme_minimal()+
   #ylim(0.,10^-6)+
+  scale_y_log10()+
   facet_grid(nse_plot$initial.cond. ~ crop_group.x)
 
 print(plotv)
