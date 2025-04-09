@@ -121,7 +121,7 @@ unique_combinations <- data_combined %>%
   summarize(count = n(), .groups = 'drop')
 # Define the Philip model for infiltration intensity
 
-write.csv(data_combined, "data_combined0004.csv")
+write.csv(data_combined, "data_combinedKSX_003.csv")
 # I(t) = (S / (2 * sqrt(t))) + K
 philip_model <- function(params, Ti) {
   S <- params[2]
@@ -145,7 +145,7 @@ objective_function <- function(params) {
   dTi <- subset_data$CC_int_time_sec
   area = subset_data$area
   inf_intensity <- philip_model(params, Ti)
-  #browser()
+  browser()
   CC_modeled_inf_m3 = cumsum(inf_intensity*dTi*area)
   nse_value <- hydroGOF::NSE(CC_modeled_inf_m3, subset_data$CC_Inf_m3)
   residuals <- subset_data$CC_Inf_m3 - CC_modeled_inf_m3
@@ -164,11 +164,11 @@ objective_function <- function(params) {
 
 
 
-lower_bounds_dry <- c(0,4*10^-9) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-2, 1*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(0,1*10^-7) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-3, 1*10^-5) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(0, 4*10^-9) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1*10^-2, 4*10^-3) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_wet <- c(0, 1*10^-7) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(1*10^-3, 4*10^-5) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 nic = c()
 results_df = data.frame()
 # Initialize an empty data frame to store the best solutions
@@ -284,7 +284,7 @@ data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, da
 data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
-write.csv(data_combined, "data_combined02_S02.csv")
+write.csv(data_combined, "data_combinedKSX_S003.csv")
 
 
 data_combined <- data_combined %>%
@@ -293,9 +293,9 @@ data_combined <- data_combined %>%
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
 #data_combined$runIN_interval = data_combined$
-write.csv(data_combined, "data_combined_S02.csv")
+write.csv(data_combined, "data_combinedKSX_S003.csv")
 #data_combined =  read.csv(file = "data_combined_S0004.csv",sep = ",",fileEncoding = "UTF-8")
-data_combined =  read.csv(file = "data_combined_S02.csv",sep = ",",fileEncoding = "UTF-8")
+data_combined =  read.csv(file = "data_combinedKSX_S003.csv",sep = ",",fileEncoding = "UTF-8")
 
 # Funkce pro přiřazení HSG na základě Ksat v jednotkách m/s
 assign_HSG_mps <- function(ksat_m_s) {
@@ -312,10 +312,36 @@ assign_HSG_mps <- function(ksat_m_s) {
   }
 }
 
-
+crop_aggregate = read.csv("crops.csv", sep = ";")
 data_combined$HSG_Ks <- sapply(data_combined$best_K, assign_HSG_mps)
+XallDTA = merge(data_combined, crop_aggregate, by.x = "crop", by.y = "crops")
 
+ghist = ggplot(data = XallDTA, aes(XallDTA$best_K, colour = XallDTA$crop_group))+
+  geom_histogram(bins = 200
+                 )+
+  #scale_y_log10()+
+  facet_grid(locality ~XallDTA$HSG_Ks , scales = "free")+
+  #xlim(0, 0.00001)+
+  
+  theme_minimal()
+plot(ghist)
 
+  plotS_K <- ggplot() +
+  geom_violin(data = XallDTA, aes(x = XallDTA$best_S , y = XallDTA$best_K, colour = XallDTA$HSG_Ks)) + 
+  #geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K), alpha = 0.5) + 
+  
+  #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
+  
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  #labs(x = "CN value", y = "Ks)", title = "Optimalization for CN and K ") +
+  theme_minimal()+
+  #ylim(0.,10^-6)+
+  #scale_y_log10()+
+  facet_grid(XallDTA$initial.cond. ~ crop_group)
+
+print(plotS_K)
+
+plot
 
 # Calculate NSE for each run.ID group
 nse_plot =  data_combined[data_combined$run.ID != 244, ]
@@ -668,8 +694,8 @@ plotCN_K <- ggplot() +
 print(plotCN_K)
 
 plotCN_S <- ggplot() +
-  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S, colour = nse_plot$crop_group.x)) + 
-  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S), alpha = 0.5) + 
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S, colour = nse_plot$HSG_Ks)) + 
+  #geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S), alpha = 0.5) + 
   
   #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
   
@@ -677,14 +703,14 @@ plotCN_S <- ggplot() +
   labs(x = "CN value", y = "Phillip Sorbtivity)", title = "Optimalization for CN and S ") +
   theme_minimal()+
   #ylim(0.,10^-6)+
-  scale_y_log10()+
+  #scale_y_log10()+
   facet_grid(nse_plot$initial.cond. ~ crop_group.x)
 
 print(plotCN_S)
 
 plotCN_X <- ggplot() +
   geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$X_optimized, colour = nse_plot$crop_group.x)) + 
-  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$X_optimized), alpha = 0.5) + 
+  #geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$X_optimized), alpha = 0.5) + 
   
   #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
   
