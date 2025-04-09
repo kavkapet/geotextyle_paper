@@ -121,7 +121,7 @@ unique_combinations <- data_combined %>%
   summarize(count = n(), .groups = 'drop')
 # Define the Philip model for infiltration intensity
 
-write.csv(data_combined, "data_combined01.csv")
+write.csv(data_combined, "data_combined0004.csv")
 # I(t) = (S / (2 * sqrt(t))) + K
 philip_model <- function(params, Ti) {
   S <- params[2]
@@ -294,7 +294,28 @@ data_combined <- data_combined %>%
   ungroup()
 #data_combined$runIN_interval = data_combined$
 write.csv(data_combined, "data_combined_S02.csv")
-data_combined =  read.csv(file = "data_combined_S003.csv",sep = ",",fileEncoding = "UTF-8")
+#data_combined =  read.csv(file = "data_combined_S0004.csv",sep = ",",fileEncoding = "UTF-8")
+data_combined =  read.csv(file = "data_combined_S02.csv",sep = ",",fileEncoding = "UTF-8")
+
+# Funkce pro přiřazení HSG na základě Ksat v jednotkách m/s
+assign_HSG_mps <- function(ksat_m_s) {
+  if (is.na(ksat_m_s)) {
+    return(NA)
+  } else if (ksat_m_s > 2.11e-6) {        # > 7.6 mm/h
+    return("A")
+  } else if (ksat_m_s > 1.06e-6) {        # > 3.8 mm/h
+    return("B")
+  } else if (ksat_m_s > 3.61e-7) {        # > 1.3 mm/h
+    return("C")
+  } else {
+    return("D")
+  }
+}
+
+
+data_combined$HSG_Ks <- sapply(data_combined$best_K, assign_HSG_mps)
+
+
 
 # Calculate NSE for each run.ID group
 nse_plot =  data_combined[data_combined$run.ID != 244, ]
@@ -497,7 +518,7 @@ print(plotx)
 
 ##### ADD CN
 #from this path: "D:\_GIT\1_ArcGIS_tools\GA_SCSCN_in_python.py"
-CNdta = read.csv(file = "output_new.csv",sep = ",",fileEncoding = "UTF-8")
+CNdta = read.csv(file = "output_new30_100Ia017_025.csv",sep = ",",fileEncoding = "UTF-8")
 CNdta$runID_time = paste(as.character(CNdta$run.ID), as.character(CNdta$interval..), sep = "_")
 
 CNdta_sel = CNdta[,c("runID_time","P_mm", "Q_measured_mm", "CN_optimized", "X_optimized", "Ia_optimized", "NSE", "RMSE")]
@@ -511,6 +532,8 @@ allDTA = merge(allDTA, crop_aggregate, by.x = "crop", by.y = "crops")
 allDTA <- allDTA %>%
   mutate(year = substr(TIMESTAMP, 1, 4))  # 
 
+
+####grain size optimalization
 colnames(allDTA)[colnames(allDTA) == "X.0..0.002mm."] <- "CLAY"
 colnames(allDTA)[colnames(allDTA) == "X.0.002..0.063mm."] <- "SILT"
 colnames(allDTA)[colnames(allDTA) == "X.0.063..2mm."] <- "SAND"
@@ -559,9 +582,9 @@ soil_tex_clean$USDA_class <- TT.points.in.classes(
 locality_f <- as.factor(soil_tex_clean$locality)
 crop_group_f <- as.factor(soil_tex_clean$crop_group)
 palette_L <- rainbow(length(levels(locality_f)))
-barvy_L  <- palette[as.numeric(locality_f)]
+barvy_L  <- palette_L[as.numeric(locality_f)]
 palette_C <- rainbow(length(levels(crop_group_f)))
-barvy_C  <- palette[as.numeric(crop_group_f)]
+barvy_C  <- palette_C[as.numeric(crop_group_f)]
 
 # 2. Define the triangle class system
 class_system <- "USDA.TT"
@@ -571,7 +594,7 @@ TT.plot(
   tri.data = soil_tex_clean[, c("CLAY", "SILT", "SAND")],
   main = "Soil Texture by Locality",
   pch = 22,
-  col = barvy_C,
+  col = barvy_L,
   #bg = barvy,  # background color by crop
   grid.show = TRUE
 )
@@ -592,6 +615,12 @@ nse_plot1 <- nse_plot %>%
   group_by(run.ID) %>%
   summarize(Inf_NSE = hydroGOF::NSE(cumulative_optimazedTotInf_m3, CC_Inf_m3), .groups = 'drop')
 nse_plot = merge(x = nse_plot, y = nse_plot1, by = "run.ID")
+
+###General statistics
+totsim = unique(srcDTA$run.ID)
+usesim = unique(allDTA$run.ID)
+CNOpt = XXXXnrow(allDTA[allDTA$NSE_CN>0.0,])
+KsOpt = nrow(nse_plot1[nse_plot1$Inf_NSE>0.0,])
 
 
 #### Plot NSE, dot
@@ -623,9 +652,24 @@ print(ploty)
 
 #### Plot CN and S
 
-plotv <- ggplot() +
-  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K, colour = nse_plot$crop_group.x)) + 
-  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K), alpha = 0.5) + 
+plotCN_K <- ggplot() +
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K, colour = nse_plot$HSG_Ks)) + 
+  #geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_K), alpha = 0.5) + 
+  
+  #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
+  
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "CN value", y = "Ks)", title = "Optimalization for CN and K ") +
+  theme_minimal()+
+  #ylim(0.,10^-6)+
+  scale_y_log10()+
+  facet_grid(nse_plot$initial.cond. ~ crop_group.x)
+
+print(plotCN_K)
+
+plotCN_S <- ggplot() +
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S, colour = nse_plot$crop_group.x)) + 
+  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$best_S), alpha = 0.5) + 
   
   #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
   
@@ -636,11 +680,41 @@ plotv <- ggplot() +
   scale_y_log10()+
   facet_grid(nse_plot$initial.cond. ~ crop_group.x)
 
-print(plotv)
+print(plotCN_S)
+
+plotCN_X <- ggplot() +
+  geom_violin(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$X_optimized, colour = nse_plot$crop_group.x)) + 
+  geom_boxplot(data = nse_plot, aes(x = nse_plot$CN_optimized , y = nse_plot$X_optimized), alpha = 0.5) + 
+  
+  #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
+  
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "CN value", y = "Potential retention)", title = "Optimalization for CN and PotRet ") +
+  theme_minimal()+
+  #ylim(0.,10^-6)+
+  scale_y_log10()+
+  facet_grid(nse_plot$initial.cond. ~ crop_group.x)
+
+print(plotCN_X)
+
+plotvx <- ggplot() +
+  geom_violin(data = nse_plot, aes(x = nse_plot$X_optimized , y = nse_plot$best_S, colour = nse_plot$crop_group.x)) + 
+  geom_boxplot(data = nse_plot, aes(x = nse_plot$X_optimized , y = nse_plot$best_S), alpha = 0.5) + 
+  
+  #geom_boxplot(data = nse_plot, aes(x = 1, y = nse_plot$CN_optimized, colour = nse_plot$crop_group)) +
+  
+  #geom_point(data = nse_plot, aes(x = run.ID, y = rainInt_m_s), color = "blue") +
+  labs(x = "CN value", y = "Phillip Sorbtivity)", title = "Optimalization for X and S ") +
+  theme_minimal()+
+  #ylim(0.,10^-6)+
+  scale_y_log10()+
+  facet_grid(nse_plot$initial.cond. ~ crop_group.x)
+
+print(plotvx)
 
 
 
-# Filtrace: řádky, kde alespoň jedna hodnota je pod 0.25
+# Filtrace: řádky, kde alespoň jedna hodnota je nad 0.25
 both_good <- nse_plot %>%
   filter(Inf_NSE >= 0.25 & NSE_CN >= 0.25)
 both_goodRuns = unique(both_good$run.ID)
