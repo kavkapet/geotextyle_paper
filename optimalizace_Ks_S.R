@@ -121,54 +121,149 @@ unique_combinations <- data_combined %>%
   summarize(count = n(), .groups = 'drop')
 # Define the Philip model for infiltration intensity
 
-write.csv(data_combined, "data_combinedKSX_003.csv")
+write.csv(data_combined, "sur_ret_test.csv")
 # I(t) = (S / (2 * sqrt(t))) + K
-philip_model <- function(params, Ti) {
-  S <- params[2]
-  K <- params[1]
+philip_model <- function(K, S, Ti) {
   S = ifelse (S >= 0,S,0)
   #browser()
   #XX = (S / (2 * sqrt(Ti))) + K
   #ifelse(time >= 0,return(0)
-  return((S / (2 * sqrt(Ti))) + K)
+  inffint = ((S / (2 * sqrt(Ti))) + K)
+  #print (inffint)
+  return (inffint)
   #)
   
 }
 
 # Define the objective function to minimize
 # It calculates the sum of squared residuals between observed and modeled infiltration intensity
+
+BilanSurface <- function(Rain, Vege, surBil, Infiltration) {
+  #browser()
+  bilance <- data.frame(
+    Rain = Rain,
+    Vege = Vege,
+    Infiltration = Infiltration
+    #SurBil == surBil
+  )
+  bilance$Rain <- Rain
+  bilance$Vege <- Vege
+  bilance$Infiltration <- Infiltration
+  bilance$surBil <- -surBil
+  
+  bilance$RearRain <- bilance$Rain - bilance$Vege
+  bilance$RearRain[bilance$RearRain < 0] <- 0
+  
+  bilance$Sur <- bilance$RearRain - bilance$Infiltration
+  bilance$Sur[bilance$Sur < 0] <- 0
+  
+  bilance$SurCum <- cumsum(bilance$Sur)
+  bilance$Surface <- rep(0, nrow(bilance))  # inicializace
+ 
+  for (rrow in 1:nrow(bilance)) {
+    if (bilance$SurCum[rrow] < surBil) {
+      bilance$Surface[rrow] <- 0
+    } else {
+      bilance$Surface[rrow] <- bilance$SurCum[rrow] - surBil
+    }
+  }
+  
+  return(bilance$Surface)
+}
+
+  
 objective_function <- function(params) {
   #browser()
-  S <- params[1]
-  K <- params[2]
+  K <- params[1]        # nasycená hydraulická vodivost (mm/s)
+  S <- params[2]        # sorptivita (mm/s^0.5)
+  Imax <- params[3]     # max. intercepce vegetace (mm)
+  LAI <- params[4]      # list area index (bez jednotky, typicky 0–1)
+  RetSur <- params[5]   # povrchová retence (mm)S <- params[1]
+  # Vegetační intercepce: v každém čase omezená Imax
+  #browser()
+  area = subset_data$area
+  Imaxm3 = Imax/1000*area
+  cumRainm3 = subset_data$CC_Rain_m3
+  cumRainmm = subset_data$rainfall.total..mm.
+  rainInt = subset_data$rain.intensity..mm.h.1.
+  RetVegm3 <- ifelse(cumRainm3 * LAI< Imaxm3,cumRainm3 * (1-LAI),cumRainm3 - Imaxm3)
+  Rain_real = cumRainm3 - RetVegm3
+  
   Ti <- subset_data$t1_sec
   dTi <- subset_data$CC_int_time_sec
-  area = subset_data$area
-  inf_intensity <- philip_model(params, Ti)
-  browser()
-  CC_modeled_inf_m3 = cumsum(inf_intensity*dTi*area)
+  
+  
+  # itrace infiltrace
+  iter0inf <- philip_model(K, S*1.05, Ti)
+  InfIter0 = cumsum(iter0inf*dTi*area) #m3
+  RetSurm3_1 = RetSur / 1000 * area[1]
+  SruBilm3_0 = BilanSurface(Rain = cumRainm3, Vege = RetVegm3, surBil = RetSurm3_1,Infiltration = InfIter0)
+  inf_intensity = data.frame()
+  t_runoff_start <- unique(subset_data$runoff_start_t_form)
+  # Celková retence [mm] + převod na [m³]
+  
+  RetTotal_m3 <- cumRainm3 - SruBilm3_0
+  
+  # Zjištění okamžiku, kdy byla celková retence překročena
+  #t_shiftX = ifelse(any(cumRainm3 >= RetTotal_m3),Ti[which(cumRainm3 >= RetTotal_m3)[1]], max(Ti))
+  
+  t_shift = ifelse(any(SruBilm3_0 > 0),Ti[which(SruBilm3_0 >= 0)[1]], max(Ti))
+  #print(t_shift)
+  # Časový posun
+  Ti_shifted <- Ti - t_shift
+  SruBilm3 = c()
+  inf_intensity = c()
+  #browser()
+  for (i in 1:length(Ti_shifted)){
+    Ti_shift = Ti_shifted[i]
+    if (Ti_shift<=0){
+      #SruBilm3[i] = cumRainm3[i]
+      inf_intensity[i] = rainInt[i]
+      #print(c("NoSurRun", inf_intensity[i,1],cumRainmm[i]/dTi[i]))
+      }
+  
+    else{
+      inf_intensity[i] = philip_model(K, S, Ti_shift)
+      #browser()
+      #print(c("SurRun",inf_intensity[i,1]))
+      
+      }
+    }
+  
+  # Modelovaná kumulativní infiltrace [m³]
+  #browser()
+  CC_modeled_inf_m3 <- cumsum(inf_intensity * dTi * area)
+  SruBilm3 = BilanSurface(Rain = cumRainm3, Vege = RetVegm3, surBil = RetSurm3_1,Infiltration = CC_modeled_inf_m3)
+  
+  RetTotal_m3 <- cumRainm3 - SruBilm3
+  
+  
+  
+  
+  
+  
   nse_value <- hydroGOF::NSE(CC_modeled_inf_m3, subset_data$CC_Inf_m3)
-  residuals <- subset_data$CC_Inf_m3 - CC_modeled_inf_m3
+  
+  residuals1 <- subset_data$CC_Inf_m3 - RetTotal_m3
+  
 #  plot(x =  subset_data$t1_t_form, y = subset_data$CC_Rain_m3)
  # points(x =  subset_data$t1_t_form, y = subset_data$CC_Runoff_m3, col = "blue")
   #points(x =  subset_data$t1_t_form, y = CC_modeled_inf_m3, col = "red")
   #points(x =  subset_data$t1_t_form, y = subset_data$CC_Inf_m3, col = "green")
   #plot(x =  subset_data$t1_t_form, y = residuals, col = "green")
-  sumres = (sum(residuals^2))
+  sumres = (sum(residuals1^2))
+  #print(c("K", K, S, Imax, LAI, RetSur, "NSE", nse_value, sumres))
   #nic <<- append(nic, sumres)
   #browser()
   return(sumres)
   #return(nse_value)
 }
 
-
-
-
-lower_bounds_dry <- c(0,1*10^-7) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
-upper_bounds_dry <- c(1*10^-3, 1*10^-5) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_dry <- c(1*10^-7,0,0,0, 2) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K [m/s])
+upper_bounds_dry <- c(1*10^-5,1*10^-3, 1, 1, 10.0) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 # Run the Genetic Algorithm to optimize S and K
-lower_bounds_wet <- c(0, 1*10^-7) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
-upper_bounds_wet <- c(1*10^-3, 4*10^-5) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+lower_bounds_wet <- c(1*10^-7,0,0,0,1) # Lower bounds for Sorptivity (S) and Hydraulic Conductivity (K)
+upper_bounds_wet <- c(4*10^-5, 1*10^-3,1,1, 10.0) # Upper bounds for Sorptivity (S) and Hydraulic Conductivity (K)
 nic = c()
 results_df = data.frame()
 # Initialize an empty data frame to store the best solutions
@@ -176,13 +271,18 @@ best_solutions_df <- data.frame(
   #crop = character(),
   #initial_cond = character(),
   run.ID = numeric(),
-  best_S = numeric(),
   best_K = numeric(),
+  best_S = numeric(),
+  best_Imax = numeric(),
+  best_LAI = numeric(),
+  best_RetSur = numeric(),
   best_fitness = numeric(),
   stringsAsFactors = TRUE
 )
 unique_run_ids <- sort(unique(data_combined$run.ID))
 # Loop through the combinations
+
+
 for (xID in unique_run_ids) {
 #for (xID in 464:464) {
   #if (unique_combinations[xID, "initial.cond."] != "very wet") {
@@ -212,6 +312,9 @@ for (xID in unique_run_ids) {
   
   initial_population[,1] <- runif(500, lower_bounds[1], upper_bounds[1])
   initial_population[,2] <- runif(500, lower_bounds[2], upper_bounds[2])
+  initial_population[,3] <- runif(50, lower_bounds[3], upper_bounds[3])
+  initial_population[,4] <- runif(50, lower_bounds[4], upper_bounds[4])
+  initial_population[,5] <- runif(50, lower_bounds[5], upper_bounds[5])
   # Run the GA with tryCatch for error handling
   ga_result <- tryCatch({
     ga(
@@ -240,17 +343,24 @@ for (xID in unique_run_ids) {
   })
   
   # If GA was successful, save the best solution
+  
   if (!is.null(ga_result)) {
+    print(paste("Done", xID))
+    #browser()
+    #print(ga_result@fitnessValue)
     optimal_KsS <- if (!is.null(ga_result@solution)) ga_result@solution else c(NA, NA)
     best_fitness <- if (!is.null(ga_result@fitnessValue)) ga_result@fitnessValue else NA
-    #browser()
+    
     # Append the best solution and fitness to the data frame
     best_solutions_df <- rbind(best_solutions_df, data.frame(
       #crop = unique_combinations[xID, 1], 
       #initial_cond = unique_combinations[xID, 2], 
       run.ID = xID,
-      best_S = optimal_KsS[2],
       best_K = optimal_KsS[1],
+      best_S = optimal_KsS[2],
+      best_Imax = optimal_KsS[3],
+      best_LAI = optimal_KsS[4],
+      best_RetSur = optimal_KsS[5],
       best_fitness = best_fitness
     ))
   } else {
@@ -261,8 +371,11 @@ for (xID in unique_run_ids) {
       #crop = unique_combinations[xID, 1], 
       #initial_cond = unique_combinations[xID, 2], 
       run.ID = xID,
-      best_S = NA,
       best_K = NA,
+      best_S = NA,
+      best_Imax = NA,
+      best_LAI = NA,
+      best_RetSur = NA,
       best_fitness = NA
     
     ))
@@ -280,11 +393,13 @@ results_df_to_merge =  best_solutions_df
 data_combined_save = data_combined
 #data_combined =data_combined_save
 data_combined = merge(data_combined, results_df_to_merge, by = "run.ID")
-data_combined$optimazedInf_mm = philip_model(params = c(data_combined$best_K, data_combined$best_S), Ti = data_combined$t1_sec)
+data_combined$optimazedInf_mm = philip_model(
+  params = c(data_combined$best_K, data_combined$best_S, data_combined$best_Imax, data_combined$best_LAI, data_combined$best_RetSur),
+  Ti = data_combined$t1_sec)
 data_combined$xx =  ((data_combined$best_S / (2 * sqrt(data_combined$t1_sec))) + data_combined$best_K)
 data_combined$optimazedInf_mm = data_combined$xx
 data_combined$optimazedTotInf_m3 = data_combined$optimazedInf_mm*data_combined$CC_int_time_sec*data_combined$area
-write.csv(data_combined, "data_combinedKSX_S003.csv")
+write.csv(data_combined, "sur_ret_test.csv")
 
 
 data_combined <- data_combined %>%
