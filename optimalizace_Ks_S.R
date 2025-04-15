@@ -112,7 +112,12 @@ data_combined$flow_rate_mm_h = (data_combined$flow_rate_m3_h / data_combined$are
 #plot(x = subset_data$interval.., y =modeled_intensity, col = "red", ylim = c(0, 0.03))
 #points(x = subset_data$interval.., y =subset_data$infiltration_intensity_m_s1, ylim = c(0, 0.03))
 
+#Ludek subset
 
+ludek_subset = compare[,c(1:57)]
+uni_ludek_ids = ludek_subset$run.ID
+based_on_ludek_subset = data_combined %>% filter(run.ID %in% uni_ludek_ids)
+#data_combined = based_on_ludek_subset
 un_list <- c("crop", "initial.cond.", "run.ID")
 
 # Create the unique combinations and count rows for each combination
@@ -180,6 +185,7 @@ objective_function <- function(params) {
   LAI <- params[4]      # list area index (bez jednotky, typicky 0–1)
   RetSur <- params[5]   # povrchová retence (mm)S <- params[1]
   # Vegetační intercepce: v každém čase omezená Imax
+  #print(c(K, S, Imax, LAI, RetSur))
   #browser()
   area = subset_data$area
   Imaxm3 = Imax/1000*area
@@ -284,7 +290,9 @@ unique_run_ids <- sort(unique(data_combined$run.ID))
 
 
 for (xID in unique_run_ids) {
+
 #for (xID in 464:464) {
+#for (xID in unique_run_ids[1:1]) {
   #if (unique_combinations[xID, "initial.cond."] != "very wet") {
   #  next  # Skip this iteration if it's not "very wet"
   #}
@@ -292,7 +300,7 @@ for (xID in unique_run_ids) {
   # Subset data for the current unique combination
   #xxID <- as.integer(unique_combinations[xID, 3])
   subset_data <- data_combined[data_combined$run.ID == xID,]
-  
+  #browser()
   print(paste("Start for combination:", xID, nrow(subset_data), subset_data$locality[1]))
   
   # Set bounds based on initial condition
@@ -312,9 +320,9 @@ for (xID in unique_run_ids) {
   
   initial_population[,1] <- runif(500, lower_bounds[1], upper_bounds[1])
   initial_population[,2] <- runif(500, lower_bounds[2], upper_bounds[2])
-  initial_population[,3] <- runif(50, lower_bounds[3], upper_bounds[3])
-  initial_population[,4] <- runif(50, lower_bounds[4], upper_bounds[4])
-  initial_population[,5] <- runif(50, lower_bounds[5], upper_bounds[5])
+  initial_population[,3] <- runif(500, lower_bounds[3], upper_bounds[3])
+  initial_population[,4] <- runif(500, lower_bounds[4], upper_bounds[4])
+  initial_population[,5] <- runif(500, lower_bounds[5], upper_bounds[5])
   # Run the GA with tryCatch for error handling
   ga_result <- tryCatch({
     ga(
@@ -324,7 +332,7 @@ for (xID in unique_run_ids) {
       upper = upper_bounds,
       popSize = 500,
       maxiter = 500,
-      run = 1000,
+      run = 500,
       seed = 123,
       suggestions = initial_population,
       pmutation = 0.02,
@@ -363,6 +371,7 @@ for (xID in unique_run_ids) {
       best_RetSur = optimal_KsS[5],
       best_fitness = best_fitness
     ))
+    
   } else {
     print(paste("Skipping combination", xID, "due to GA failure"))
     
@@ -408,9 +417,11 @@ data_combined <- data_combined %>%
   mutate(cumulative_optimazedTotInf_m3 = cumsum(optimazedTotInf_m3)) %>%
   ungroup()
 #data_combined$runIN_interval = data_combined$
-write.csv(data_combined, "data_combinedKSX_S003.csv")
+write.csv(data_combined, "XX.csv")
+saveRDS(data_combined, "data_combinedKSX_S003.rds")
 #data_combined =  read.csv(file = "data_combined_S0004.csv",sep = ",",fileEncoding = "UTF-8")
-data_combined =  read.csv(file = "data_combinedKSX_S003.csv",sep = ",",fileEncoding = "UTF-8")
+data_combined =  read.csv(file = "data_combinedKSX_S003_newHope2.csv",sep = ",",fileEncoding = "UTF-8")
+data_combined = readRDS("data_combinedKSX_S003.rds")
 
 # Funkce pro přiřazení HSG na základě Ksat v jednotkách m/s
 assign_HSG_mps <- function(ksat_m_s) {
