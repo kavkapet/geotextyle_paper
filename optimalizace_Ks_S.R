@@ -115,6 +115,8 @@ data_combined$flow_rate_mm_h = (data_combined$flow_rate_m3_h / data_combined$are
 #Ludek subset
 
 ludek_subset = compare[,c(1:57)]
+write.csv(ludek_subset, "ludek_based_subset.csv")
+ludek_subset1 = read.csv(file = "ludek_based_subset.csv",sep = ",",fileEncoding = "UTF-8")
 uni_ludek_ids = ludek_subset$run.ID
 based_on_ludek_subset = data_combined %>% filter(run.ID %in% uni_ludek_ids)
 #data_combined = based_on_ludek_subset
