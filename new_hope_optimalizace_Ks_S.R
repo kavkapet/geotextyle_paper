@@ -167,122 +167,15 @@ store_result <- function(ga_result, run_id, best_solutions_df) {
 best_solutions_df <- data.frame()
 unique_ids <- unique(data_combined$run.ID)
 
-#for (xID in unique_ids) {
+
+lower_bounds_dry <- c(1e-7, 0, 0, 0, 2)
+upper_bounds_dry <- c(1e-5, 1e-3, 1, 1, 10)
+lower_bounds_wet <- c(1e-7, 0, 0, 0, 1)
+upper_bounds_wet <- c(4e-5, 1e-3, 1, 1, 10)
+  
+#for (xID in unique_run_ids) {
 for (xID in 464:464) {
 #for (xID in unique_run_ids[21:21]) {
-  
-  
-  # GA Infiltration Model in R
-  
-  library(GA)
-  library(dplyr)
-  library(hydroGOF)
-  library(lubridate)
-  
-  # Load data
-  data_combined <- read.csv("runoff_sediment_intervals_20240925_en.csv", sep = ";", fileEncoding = "UTF-8") %>%
-    mutate(
-      TIMESTAMP = dmy(date),
-      t1_t_form = hms(t1),
-      t2_t_form = hms(t2),
-      runoff_start_t_form = hms(time.to.runoff),
-      dt_t_form = hms(interval.duration),
-      tot_time_t_form = if_else(is.na(t2_t_form) | t2_t_form == hms("00:00:00"), runoff_start_t_form, dt_t_form),
-      month = month(TIMESTAMP),
-      cover = case_when(
-        crop %in% c("cultivated fallow", "bare soil") ~ "bare",
-        crop %in% c("Geotextile Macmat 8.1", "Geotextile Enkamat 7010", "Geotextile K700",
-                    "Geotextile Biomac-c", "Geotextile Enkamat 7020", "Geotextile Macmat 18.1",
-                    "Macmat 18 fill", "Jute", "Triangle", "Enkamat 7020 filled",
-                    "Fortrac 3D filled", "Fortrac 3D") ~ "geotex",
-        TRUE ~ "vege"
-      ),
-      area = plot.length..m. * plot.width..m.,
-      runoff = as.numeric(flow.rate..l.min.1.),
-      runoffhighMM = total.discharge..l. / area,
-      crop = ifelse(is.na(crop), "Unknown", crop),
-      rain.intensity..mm.h.1. = as.numeric(rain.intensity..mm.h.1.),
-      soilloss = as.numeric(SS.flux..g.min.1.),
-      slope = plot.slope.... / 100,
-      BBCH = case_when(
-        cover == "bare" & is.na(BBCH) ~ 0,
-        cover == "geotex" ~ 50,
-        TRUE ~ BBCH
-      ),
-      C = ifelse(is.na((100 - BBCH) / 100), 0.95, (100 - BBCH) / 100),
-      t1_sec = hour(t1_t_form) * 3600 + minute(t1_t_form) * 60 + second(t1_t_form),
-      CC_int_time_sec = hour(tot_time_t_form) * 3600 + minute(tot_time_t_form) * 60 + second(tot_time_t_form),
-      CC_Rain_m3 = rainfall.total..mm. / 1000 * area,
-      CC_Runoff_m3 = total.discharge..l. / 1000,
-      CC_Inf_m3 = pmax(CC_Rain_m3 - CC_Runoff_m3, 0),
-      CC_control = CC_Rain_m3 - CC_Runoff_m3
-    )
-  
-  data_combined <- data_combined %>%
-    filter(!is.na(soilloss), !is.na(dt_t_form), !is.na(runoff),
-           !is.na(rainfall.total..mm.), !is.na(rain.intensity..mm.h.1.),
-           !is.na(total.discharge..l.), t1_sec > 0, soilloss >= 0, CC_control >= 0)
-  
-  # Philip infiltration model
-  philip_model <- function(K, S, Ti) {
-    S <- ifelse(S >= 0, S, 0)
-    (S / (2 * sqrt(Ti))) + K
-  }
-  
-  # Surface water balance
-  BilanSurface <- function(Rain, Vege, surBil, Infiltration) {
-    RearRain <- pmax(0, Rain - Vege)
-    Sur <- pmax(0, RearRain - Infiltration)
-    pmax(0, Sur - surBil)
-  }
-  
-  # NSE calculation
-  calc_nse <- function(sim, obs) {
-    1 - sum((sim - obs)^2) / sum((obs - mean(obs))^2)
-  }
-  
-  # Objective function
-  objective_function <- function(params) {
-    K <- params[1]; S <- params[2]; Imax <- params[3]; LAI <- params[4]; RetSur <- params[5]
-    area <- subset_data$area
-    cumRainm3 <- subset_data$CC_Rain_m3
-    rainInt <- subset_data$rain.intensity..mm.h.1.
-    Ti <- subset_data$t1_sec
-    dTi <- subset_data$CC_int_time_sec
-    
-    Imaxm3 <- Imax / 1000 * area
-    RetVegm3 <- ifelse(cumRainm3 * LAI > Imaxm3, 0, cumRainm3 * LAI)
-    iter0inf <- philip_model(K, S * 1.05, Ti)
-    InfIter0 <- cumsum(iter0inf * dTi * area)
-    RetSurm3_0 <- RetSur / 1000 * area[1]
-    SruBilm3_0 <- BilanSurface(cumRainm3, RetVegm3, RetSurm3_0, InfIter0)
-    RetTotal_m3 <- cumRainm3 - SruBilm3_0
-    
-    t_shift <- ifelse(any(SruBilm3_0 > 0), Ti[which(SruBilm3_0 > 0)[1]], max(Ti))
-    Ti_shifted <- Ti - t_shift
-    inf_intensity <- ifelse(Ti_shifted <= 0, rainInt / 3600000, philip_model(K, S, pmax(1, Ti_shifted)))
-    CC_modeled_inf_m3 <- cumsum(inf_intensity * dTi * area)
-    SruBilm3 <- BilanSurface(cumRainm3, RetVegm3, RetSurm3_0, CC_modeled_inf_m3)
-    RetTotal_m3 <- cumRainm3 - SruBilm3
-    
-    observed <- subset_data$CC_Inf_m3
-    modeled <- RetTotal_m3
-    if (length(observed) < 2 || all(observed == observed[1])) return(1e10)
-    
-    return(sum((observed - modeled)^2))
-  }
-  
-  lower_bounds_dry <- c(1e-7, 0, 0, 0, 2)
-  upper_bounds_dry <- c(1e-5, 1e-3, 1, 1, 10)
-  lower_bounds_wet <- c(1e-7, 0, 0, 0, 1)
-  upper_bounds_wet <- c(4e-5, 1e-3, 1, 1, 10)
-  
-  best_solutions_df <- data.frame()
-  unique_run_ids <- sort(unique(data_combined$run.ID))
-  
-  #for (xID in unique_run_ids) {
-  for (xID in 464:464) {
-  #for (xID in unique_run_ids[21:21]) {
     cat("\n--- Running GA for run.ID:", xID, "---\n")
     subset_data <- data_combined[data_combined$run.ID == xID, ]
     if (nrow(subset_data) == 0) next
@@ -301,15 +194,15 @@ for (xID in 464:464) {
         lower = bounds$lower,
         upper = bounds$upper,
         popSize = 500,
-        maxiter = 500,
-        run = 100,
+        maxiter = 1000,
+        run = 500,
         seed = 123 + xID,
         suggestions = initial_population,
         pmutation = 0.08,
         pcrossover = 0.85,
         elitism = 5,
         optim = TRUE,
-        optimArgs = list(method = "L-BFGS-B", poptim = 0.2, pressel = 0.3, control = list(fnscale = -1, maxit = 200)),
+        optimArgs = list(method = "L-BFGS-B", poptim = 0.2, pressel = 0.3, control = list(fnscale = -1, maxit = 1000)),
         monitor = FALSE
       )
     }, error = function(e) {
@@ -340,10 +233,7 @@ for (xID in 464:464) {
       
       cat("Finished run.ID:", xID, "with NSE =", round(NSE, 4), "\n")
     }
-  }
-
-  best_solutions_df <- store_result(ga_result, xID, best_solutions_df)
-}
+     best_solutions_df <- store_result(ga_result, xID, best_solutions_df)}
 
 write.csv(best_solutions_df, "best_solutions_summary.csv", row.names = FALSE)
 
