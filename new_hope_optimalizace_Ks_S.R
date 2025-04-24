@@ -20,18 +20,8 @@ zero_time <- as.POSIXct("00:00:00", format = "%H:%M:%S")
 
 data_combined$dt_t_form <- as.POSIXct(data_combined$interval.duration, format = "%H:%M:%S")
 data_combined$tot_time_t_form = as.POSIXct(ifelse(data_combined$t2_t_form == zero_time| is.na(data_combined$t2_t_form), data_combined$runoff_start_t_form, data_combined$dt_t_form))
-data_combined$month <- format(srcDTA$TIMESTAMP, "%m")
+data_combined$month <- format(data_combined$TIMESTAMP, "%m")
 
-#####NE
-
-data_combined$tot_time_t_form <- as.POSIXct(
-  ifelse(is.na(data_combined$tot_time_t_form), data_combined$runoff_start_t_form, data_combined$tot_time_t_form))
-data_combined$tot_time_t_form <- ifelse(is.na(data_combined$t2_t_form) | data_combined$t2_t_form == zero_time,
-                                        data_combined$runoff_start_t_form,
-                                        data_combined$dt_t_form)
-data_combined$tot_time_t_form <- ifelse(is.na(data_combined$tot_time_t_form),
-                                        data_combined$runoff_start_t_form,
-                                        data_combined$tot_time_t_form)
 ####ANO
 # Cover classification
 data_combined$cover <- ifelse(data_combined$crop %in% c("cultivated fallow", "bare soil"), "bare",
@@ -54,6 +44,10 @@ data_combined$BBCH <- ifelse(data_combined$cover == "bare" & is.na(data_combined
 data_combined$C <- ifelse(is.na((100 - data_combined$BBCH) / 100), 0.95,
                           (100 - data_combined$BBCH) / 100)
 
+data_combined$t1_hour = as.numeric(format(data_combined$t1_t_form, "%H")) + as.numeric(format(data_combined$t1_t_form, "%M"))/60 + as.numeric(format(data_combined$t1_t_form, "%S"))/3600 
+data_combined$t1_sec = as.numeric(format(data_combined$t1_t_form, "%H"))*3600 + as.numeric(format(data_combined$t1_t_form, "%M"))*60 + as.numeric(format(data_combined$t1_t_form, "%S")) 
+data_combined$CC_int_time_sec = as.numeric(format(data_combined$tot_time_t_form, "%H"))*3600 + as.numeric(format(data_combined$tot_time_t_form, "%M"))*60 + as.numeric(format(data_combined$tot_time_t_form, "%S")) 
+
 data_combined$t1_sec <- as.numeric(format(data_combined$t1_t_form, "%H")) * 3600 +
   as.numeric(format(data_combined$t1_t_form, "%M")) * 60 +
   as.numeric(format(data_combined$t1_t_form, "%S"))
@@ -67,17 +61,23 @@ data_combined$CC_Runoff_m3 <- data_combined$total.discharge..l. / 1000
 data_combined$CC_Inf_m3 <- pmax(data_combined$CC_Rain_m3 - data_combined$CC_Runoff_m3, 0)
 data_combined$CC_control <- data_combined$CC_Rain_m3 - data_combined$CC_Runoff_m3
 
-# Filter valid records
-data_combined <- data_combined[!is.na(data_combined$soilloss) &
-                                 !is.na(data_combined$dt_t_form) &
-                                 !is.na(data_combined$runoff) &
-                                 !is.na(data_combined$rainfall.total..mm.) &
-                                 !is.na(data_combined$rain.intensity..mm.h.1.) &
-                                 !is.na(data_combined$total.discharge..l.) &
-                                 data_combined$t1_sec > 0 &
-                                 data_combined$soilloss >= 0 &
-                                 data_combined$CC_control >= 0, ]
+data_fall <- data_combined %>% filter(
+  is.na(soilloss) | 
+    is.na(interval.duration) | 
+    is.na(runoff) | 
+    is.na(rainfall.total..mm.) | 
+    is.na(rain.intensity..mm.h.1.) | 
+    data_combined$t1_hour <= 0 |
+    data_combined$soilloss < 0)
+X <- data_combined[is.na(data_combined$total.discharge..l.), ]
+Y <- data_combined[is.na(data_combined$dt_t_form), ]
+Z = bind_rows(data_fall, X, Y)
+data_fall= distinct(Z)
 
+write.csv(data_fall, "data_fall_nodata.csv")
+
+#!data_combined$CC_int_time_sec <= 0)
+data_combined = anti_join(data_combined, data_fall)
 
 
 
@@ -165,7 +165,7 @@ store_result <- function(ga_result, run_id, best_solutions_df) {
 
 # Optimization across all IDs
 best_solutions_df <- data.frame()
-unique_ids <- unique(data_combined$run.ID)
+unique_run_ids <- unique(data_combined$run.ID)
 
 
 lower_bounds_dry <- c(1e-7, 0, 0, 0, 2)
@@ -173,8 +173,8 @@ upper_bounds_dry <- c(1e-5, 1e-3, 1, 1, 10)
 lower_bounds_wet <- c(1e-7, 0, 0, 0, 1)
 upper_bounds_wet <- c(4e-5, 1e-3, 1, 1, 10)
   
-#for (xID in unique_run_ids) {
-for (xID in 464:464) {
+for (xID in unique_run_ids) {
+#for (xID in 464:464) {
 #for (xID in unique_run_ids[21:21]) {
     cat("\n--- Running GA for run.ID:", xID, "---\n")
     subset_data <- data_combined[data_combined$run.ID == xID, ]
