@@ -173,8 +173,8 @@ upper_bounds_dry <- c(1e-5, 1e-3, 1, 1, 10)
 lower_bounds_wet <- c(1e-7, 0, 0, 0, 1)
 upper_bounds_wet <- c(4e-5, 1e-3, 1, 1, 10)
   
-#for (xID in unique_run_ids) {
-for (xID in 464:464) {
+for (xID in unique_run_ids) {
+#for (xID in 464:464) {
 #for (xID in unique_run_ids[21:21]) {
     cat("\n--- Running GA for run.ID:", xID, "---\n")
     subset_data <- data_combined[data_combined$run.ID == xID, ]
