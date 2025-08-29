@@ -171,7 +171,51 @@ sdata_wide_sel = sdata_wide#[sdata_wide$opat_typ_grain == "BSOIL",]
 scaleFactorq <- max(qsresnF_sel$prutok2_l.min) / max(qsresnF_sel$smyv1_g.l)
 scaleFactor <- median(qsresnF_sel$Qcum_l) / median(qsresnF_sel$S2cum_g)
 scaleFactor_grain <- max(qsresnF_sel$Qcum_l) / 60
-xxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
+xxplot <- ggplot() +
+  # Kumulativní průtok – černě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  
+  # Kumulativní sediment – šedě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  
+  #geom_point(data = summary_table_sel, mapping = aes(x = summary_table_sel$init_state_num, y = summary_table_sel$median_percentage*scaleFactor_grain, color = as.character(summary_table_sel$particlesize), shape = as.character(summary_table_sel$aggregates))) +
+  
+  
+  # Osy s rozvolněním
+  scale_y_continuous(
+    name = "\u03A3 Runoff [l]",
+    sec.axis = sec_axis(~./scaleFactor, name = "\u03A3 Sediment [g]"),
+    expand = expansion(mult = c(0.05, 0.1))
+  ) +
+  scale_x_continuous(
+    name = "Time [min]",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+  
+  facet_grid(poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+  
+  # Styl bez mřížky
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  ) +
+  
+  labs(
+    title = "Cumulative Runoff and Sediment"
+  )
+
+# Vykreslení
+print(xxplot)
+
+
+zxxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
   geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
   geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g * scaleFactor), method="loess", col="grey", show.legend = TRUE) +
@@ -181,13 +225,20 @@ xxplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_
   #                   stat_summary(mapping = aes(x = grain$init_state_num , y = grain$percentage, colour = grain$aggregates, shape = as.factor(grain$particlesize)), fun = median, geom="point", show.legend = FALSE, vjust=-1, size = 10)+
   scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="g/l")) +
   facet_grid (opat_typ_grain ~ poc_stav_int) +
-  ylim (0, 350) +
-  theme_bw()
+  #ylim (0, 350) +
+  theme_bw() + 
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  )
 
 
 
 
-plot(xxplot)
+plot(zxxplot)
 
 xxplot_Q  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
   geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
@@ -207,14 +258,52 @@ plot(xxplot_Q)
 xxplot_PQ  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
    #geom_line (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l), method="loess", col="black") +
    #geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$Qcum_l, colour = qsresnF_sel$opat_typ_grain), method="loess") +
-   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$perkolace, colour = qsresnF_sel$opat_typ_grain), method="loess", size = 1) +
-   facet_grid (poc_stav_int ~ opat_typ_grain) +
+   geom_point (data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$perkolace, colour = qsresnF_sel$poc_stav_int), method="loess", size = 1) +
+   facet_grid ( ~ opat_typ_grain) +
    labs(title = "Percolation", x = "Time", y = "Cumulative percolation [l]")+
    
    theme_bw()
 
 plot(xxplot_PQ)
 
+
+
+"""xxplot_PQ <- ggplot() +
+  # Perkolace jako body, bez barev, rozlišení podle opatření tvarem
+  geom_point(
+    data = qsresnF_sel,
+    mapping = aes(
+      x = t2_min,
+      y = perkolace,
+      shape = opat_typ_grain
+    ),
+    size = 1.5,
+    colour = "black"
+  ) +
+  
+  # Facet jen podle opatření (sloupce)
+  facet_grid(. ~ poc_stav_int) +
+  
+  # Popisky os a název grafu
+  labs(
+    title = "Percolation",
+    x = "Time [min]",
+    y = "Cumulative percolation [l]"
+  ) +
+  
+  # Styl – černobílý, bez mřížek
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1)
+  ) +
+  scale_shape_manual(values = c(0, 1, 2, 5, 6, 15))  # různé černobílé tvary pro opatření
+
+
+plot(xxplot_PQ)"""
 
 xxplot_S  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_sel$t2_min)/2)))+
    geom_line(data = qsresnF_sel, mapping = aes(x = qsresnF_sel$t2_min, y=qsresnF_sel$S2cum_g), method="loess", col="grey", show.legend = TRUE) +
@@ -259,6 +348,10 @@ xxplot2 <- ggplot() +
     sec.axis = sec_axis(~./scaleFactor_grain2, name = "flux - gray [g/min], PSD - colours [% Undersize]")
   ) +
   theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # odstraní hlavní gridlines
+    panel.grid.minor = element_blank()   # odstraní vedlejší (jemnější) gridlines
+  ) +
   labs(title = "Runoff, Sediment flux and Particle Size Distribution", x = "Time")
 
 # Print the plot
@@ -288,7 +381,7 @@ yyplot  = ggplot() + #(qsresnF_sel$cas_do_odtok + (qsresnF_sel$t1_min + qsresnF_
   #scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(~./scaleFactor, name="\u03A3 g")) +
   #scale_y_continuous(name="\u03A3 l", sec.axis=sec_axis(name="\u03A3 g")) +
   facet_grid (opat_typ_grain ~ poc_stav_int) +
-  ylim (0, 25) +
+  #ylim (0, 25) +
   theme_bw()
 
 
@@ -632,7 +725,66 @@ eDTA1 <- eDTA %>% mutate(opat_typ = ifelse(poc_stav %in% c("such\xe1" ), "bare_d
 
 eDTA = eDTA[c(3, 5, )]
 
-x <- subset(qsres, "opatreni" = "FALSE")
+x <- subset(qsres, "opatreni" = "FALSE")library(dplyr)
+library(ggplot2)
+
+# Oříznutí časového okna podle intenzity srážek (na základě názvu scénáře)
+qsresnF_sel <- qsresnF_sel %>%
+  mutate(
+    max_time = case_when(
+      grepl("160", poc_stav_int) ~ 15,
+      grepl("120", poc_stav_int) ~ 20,
+      grepl("60", poc_stav_int) ~ 30,
+      TRUE ~ max(t2_min, na.rm = TRUE)
+    )
+  ) %>%
+  filter(t2_min <= max_time)
+
+# Vykreslení grafu
+ggplot() +
+  # Kumulativní průtok
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+
+  # Kumulativní sediment
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+
+  # PSD hodnoty – barvy a tvary
+  geom_point(
+    data = summary_table_sel,
+    aes(
+      x = init_state_num,
+      y = median_percentage * scaleFactor_grain,
+      color = as.character(particlesize),
+      shape = as.character(aggregates)
+    )
+  ) +
+
+  # Osy
+  scale_y_continuous(
+    name = "Σ Q [l]",
+    sec.axis = sec_axis(~./scaleFactor, name = "Σ S [g]")
+  ) +
+
+  # Rozdělení podle scénáře a opatření – s free X osou
+  facet_grid(opat_typ_grain ~ poc_stav_int, scales = "free_x") +
+
+  # Vzhled
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  ) +
+
+  labs(
+    title = "Cumulative Runoff, Sediment and PSD",
+    x = "Time [min]"
+  )
+
 
 vyber_R <- select(qsres, lokalita, simcislo, repetice, sklon_st, intenzita, ID, t1_min, t2_min, prutok1_l.min, Qcum_l)
 
@@ -650,9 +802,281 @@ write.csv(vyber_R, "vyber_R.csv")
 mean(vyber_R$sklon_st == 30 & vyber_R$t2_min == "2.5", vyber_R$prutok1_l.min)
   
 
+#######################final plost
+
+# 1. Rozdělení na 60 mm a zbytek
+qs_60 <- qsresnF_sel %>% filter( qsresnF_sel$intenzita == 60)
+qs_rest <- qsresnF_sel %>% filter(qsresnF_sel$intenzita %in% c(120, 160))
+
+sum_60 <- summary_table_sel %>% filter(summary_table_sel$poc_stav_int %in% c("1 60 dry","2 60 wet"))
+sum_rest <- summary_table_sel %>% filter(summary_table_sel$poc_stav_int %in% cc("3 120 wet", "4 160 wet"))
+
+# 2. Funkce pro graf
+plot_xx <- function(qs_data, sum_data, title_text) {
+  ggplot() +
+    # Runoff čára a body
+    geom_line(data = qs_data, aes(x = t2_min, y = Qcum_l), col = "black") +
+    geom_point(data = qs_data, aes(x = t2_min, y = Qcum_l), col = "black") +
+    
+    # Sediment čára a body
+    geom_line(data = qs_data, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+    geom_point(data = qs_data, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+    
+  
+    
+    scale_y_continuous(
+      name = "\u03A3 Q [l]",
+      sec.axis = sec_axis(~./scaleFactor, name = "\u03A3 S [g]")
+    ) +
+    
+    facet_grid(poc_stav_int ~ opat_typ_grain) +
+    
+    theme_bw() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 60, hjust = 1),
+      strip.text = element_text(face = "bold"),
+      legend.title = element_text(face = "bold")
+    ) +
+    
+    labs(
+      title = title_text,
+      x = "Time [min]"
+    )
+}
+
+# 3. Vykreslit oba grafy
+xxplot_60 <- plot_xx(qs_60, sum_60, "Runoff & Sediment – 60 mm/h")
+xxplot_rest <- plot_xx(qs_rest, sum_rest, "Runoff & Sediment – 120 & 160 mm/h")
+
+# 4. Zobrazit
+print(xxplot_60)
+print(xxplot_rest)
 
 
 
+xxplot <- ggplot() +
+  # Kumulativní průtok – černě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  
+  # Kumulativní sediment – šedě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  
+  # Osy s rozvolněním
+  scale_y_continuous(
+    name = "\u03A3 Q [l]",
+    sec.axis = sec_axis(~./scaleFactor, name = "\u03A3 S [g]"),
+    expand = expansion(mult = c(0.05, 0.1))
+  ) +
+  scale_x_continuous(
+    name = "Time [min]",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+  # Facety prohoz
+  
+  library(ggplot2)
+
+xxplot <- ggplot() +
+  # Kumulativní průtok – černě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = Qcum_l), col = "black") +
+  
+  # Kumulativní sediment – šedě
+  geom_line(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  geom_point(data = qsresnF_sel, aes(x = t2_min, y = S2cum_g * scaleFactor), col = "grey") +
+  
+  # Osy s rozvolněním
+  scale_y_continuous(
+    name = "\u03A3 Runoff [l]",
+    sec.axis = sec_axis(~./scaleFactor, name = "\u03A3 Sediment [g]"),
+    expand = expansion(mult = c(0.05, 0.1))
+  ) +
+  scale_x_continuous(
+    name = "Time [min]",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+
+  facet_grid(poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+  
+  # Styl bez mřížky
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  ) +
+  
+  labs(
+    title = "Cumulative Runoff and Sediment"
+  )
+
+# Vykreslení
+print(xxplot)
 
 
+
+xxplot_SLR <- ggplot(qsresnF_selNoBare, aes(x = t2_min, y = SLR, colour = opat_typ_grain)) +
+  # Pouze body, bez linek
+  geom_point(size = 1.8) +
+  
+  # Facet pouze podle opatření × scénář
+  facet_grid(poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+  
+  # Popisky
+  labs(
+    title = "SLR",
+    x = "Time [min]",
+    y = "SLR",
+    colour = "Treatment type"
+  ) +
+  
+  # Odstíny šedé místo barev
+  scale_colour_grey(start = 0.2, end = 0.8) +  # světlejší až tmavší šedá
+  
+  # Styl
+  ylim(0, 4) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  )
+plot(xxplot_SLR)
+
+
+xxplot_perkolace <- ggplot(qsresnF_sel, aes(x = t2_min, y = perkolace, colour = opat_typ_grain)) +
+  # Pouze body, bez linek
+  geom_point(size = 1.8) +
+  
+  # Facet pouze podle opatření × scénář
+  facet_grid(poc_stav_int ~ opat_typ_grain) +
+  
+  # Popisky
+  labs(
+    title = "Percolation",
+    x = "Time [min]",
+    y = "\u03A3 Q [l]",
+    colour = "Treatment type"
+  ) +
+  
+  # Odstíny šedé místo barev
+  scale_colour_grey(start = 0.2, end = 0.8) +  # světlejší až tmavší šedá
+  
+  # Styl
+  #ylim(0, 4) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold")
+  )
+plot(xxplot_perkolace)
+
+
+xxplot_WLR  = ggplot() + #(qsresnF_selNoBare$cas_do_odtok + (qsresnF_selNoBare$t1_min + qsresnF_selNoBare$t2_min)/2)))+
+  geom_line(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$WLR), method="loess", col="grey", show.legend = TRUE) +
+  geom_point(data = qsresnF_selNoBare, mapping = aes(x = qsresnF_selNoBare$t2_min, y=qsresnF_selNoBare$WLR, colour = qsresnF_selNoBare$opat_typ_grain), method="loess") +
+  facet_grid (poc_stav_int ~ opat_typ_grain, scales = "free_y") +
+  #ylim (0, 1) +
+
+  scale_colour_grey(start = 0.2, end = 0.8) +  # světlejší až tmavší šedá
+  labs(title = "Runoff coeficient", x = "Time", y = "Runoff coeficient [-]", colour = "Treatment type")+
+  theme_bw()+
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"))
+plot(xxplot_WLR)
+
+
+
+aaa = read.csv("BudovaJednotlivaNeboBlokBudov_ExportTable.csv", stringsAsFactors = F, sep = ";", dec = ",", header = T)
+aaab = unique(aaa$druhbud)
+write.csv(aaab, "unique_druh_bud.csv")
+
+
+
+# Zrnitost Vytvoření nových faktorových sloupců pro legendu
+summary_table_sel$particlesize_fct <- factor(summary_table_sel$particlesize,
+                                             levels = c(2.13, 9.86, 51.8),
+                                             labels = c("2.13 µm", "9.86 µm", "51.8 µm"))
+
+summary_table_sel$aggregates_fct <- factor(summary_table_sel$aggregates,
+                                           levels = c("with", "without"),
+                                           labels = c("With aggregates", "Without aggregates"))
+
+# Vykreslení grafu
+xxplot <- ggplot() +
+  # Sediment – šedé body (hlavní osa Y)
+  geom_point(data = qsresnF_sel,
+             aes(x = t2_min, y = Smean),
+             color = "grey", size = 2, shape = 16) +
+  
+  # Undersize – barevné prázdné body (sekundární osa Y)
+  geom_point(data = summary_table_sel,
+             aes(x = init_state_num,
+                 y = median_percentage * 1.5,
+                 color = particlesize_fct,
+                 shape = aggregates_fct),
+             fill = "white",
+             stroke = 0.5,
+             size = 3) +
+  
+  # Osy
+  scale_y_continuous(
+    name = "Sediment [g/\u0394t]",
+    sec.axis = sec_axis(~./1.5, name = "Undersize [%]"),
+    expand = expansion(mult = c(0.05, 0.1))
+  ) +
+  scale_x_continuous(
+    name = "Time [min]",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+  # Legenda pro barvy (velikost částic)
+  scale_color_manual(
+    name = "Undersize particle size",
+    values = c("2.13 µm" = "red", "9.86 µm" = "blue", "51.8 µm" = "black")
+  ) +
+  
+  # Legenda pro tvary (agregáty)
+  scale_shape_manual(
+    name = "Aggregate structure",
+    values = c("With aggregates" = 21, "Without aggregates" = 17),
+    labels = c("Before sonication", "After sonication")
+  ) +
+  
+  # Rozložení podle typu opatření a podmínek
+  facet_grid(poc_stav_int ~ opat_typ_grain) +
+  
+  # Styl grafu
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  ) +
+  
+  labs(
+    title = "Sediment Load and Particle Size Distribution"
+  )
+
+# Zobrazení grafu
+print(xxplot)
 
